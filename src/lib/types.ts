@@ -99,7 +99,8 @@ export type PartnerApplicationStatus = "pending" | "approved" | "rejected";
 
 export interface PartnerApplication {
   id: string;
-  applicantPhone: string;
+  applicantPhone: string | null;
+  applicantEmail: string | null;
   businessName: string;
   businessId: string;
   area: string;

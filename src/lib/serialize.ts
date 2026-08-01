@@ -121,6 +121,7 @@ export function serializePartnerApplication(
   return {
     id: a.id,
     applicantPhone: a.applicant.phone,
+    applicantEmail: a.applicant.email,
     businessName: a.businessName,
     businessId: a.businessId,
     area: a.area,

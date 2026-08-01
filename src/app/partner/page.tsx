@@ -165,7 +165,7 @@ export default function PartnerPage() {
             className="rounded-xl border border-stone-200 px-4 py-2.5 text-sm outline-none focus:border-emerald-500"
           />
           <p className="text-xs text-stone-400">
-            ניצור איתכם קשר למספר המחובר לחשבון שלכם.
+            ניצור איתכם קשר {user.phone ? `למספר ${user.phone}` : user.email ? `לכתובת ${user.email}` : "דרך פרטי החשבון שלכם"}.
           </p>
           <div className="rounded-xl border border-dashed border-stone-300 px-4 py-4 text-center text-sm text-stone-500">
             📎 לאחר האישור תוכלו להעלות את פרטי תעודת הכשרות ולהשלים את

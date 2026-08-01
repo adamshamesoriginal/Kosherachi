@@ -16,6 +16,8 @@ export async function GET(request: NextRequest) {
     user: {
       id: user.id,
       phone: user.phone,
+      email: user.email,
+      name: user.name,
       ownedRestaurants,
       isAdmin: isAdminPhone(user.phone),
     },

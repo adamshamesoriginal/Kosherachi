@@ -20,7 +20,9 @@ interface Preferences {
 
 export interface AuthUser {
   id: string;
-  phone: string;
+  phone: string | null;
+  email: string | null;
+  name: string | null;
   ownedRestaurants: { id: string; name: string }[];
   isAdmin: boolean;
 }

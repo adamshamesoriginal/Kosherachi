@@ -6,25 +6,50 @@ import { useApp } from "@/context/AppContext";
 
 const RESEND_COOLDOWN_SECONDS = 30;
 
+const OAUTH_ERROR_MESSAGES: Record<string, string> = {
+  google_not_configured: "התחברות עם Google אינה זמינה כרגע",
+  google_denied: "ההתחברות עם Google בוטלה",
+  google_state_mismatch: "פג תוקף הבקשה, נסו שוב",
+  google_failed: "ההתחברות עם Google נכשלה, נסו שוב",
+  apple_not_configured: "התחברות עם Apple אינה זמינה כרגע",
+  apple_denied: "ההתחברות עם Apple בוטלה",
+  apple_state_mismatch: "פג תוקף הבקשה, נסו שוב",
+  apple_failed: "ההתחברות עם Apple נכשלה, נסו שוב",
+};
+
 function AuthPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next");
+  const oauthError = searchParams.get("error");
   const { prefs, refreshUser } = useApp();
 
   const [step, setStep] = useState<"phone" | "otp">("phone");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [devCode, setDevCode] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    oauthError ? (OAUTH_ERROR_MESSAGES[oauthError] ?? "ההתחברות נכשלה, נסו שוב") : null
+  );
   const [submitting, setSubmitting] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const [providers, setProviders] = useState({ google: false, apple: false });
 
   useEffect(() => {
     if (cooldown <= 0) return;
     const timer = setInterval(() => setCooldown((c) => Math.max(0, c - 1)), 1000);
     return () => clearInterval(timer);
   }, [cooldown]);
+
+  useEffect(() => {
+    fetch("/api/auth/providers")
+      .then((res) => (res.ok ? res.json() : { google: false, apple: false }))
+      .then(setProviders)
+      .catch(() => {});
+  }, []);
+
+  const oauthHref = (provider: "google" | "apple") =>
+    `/api/auth/${provider}/start${next ? `?next=${encodeURIComponent(next)}` : ""}`;
 
   const requestOtp = async () => {
     if (submitting || cooldown > 0) return;
@@ -118,13 +143,43 @@ function AuthPageInner() {
         {error && <p className="text-sm text-red-600">{error}</p>}
 
         {step === "phone" ? (
-          <button
-            onClick={requestOtp}
-            disabled={submitting || phone.trim().length < 9}
-            className="rounded-2xl bg-emerald-700 py-3.5 font-bold text-white disabled:opacity-40"
-          >
-            {submitting ? "שולח..." : "שליחת קוד אימות"}
-          </button>
+          <>
+            <button
+              onClick={requestOtp}
+              disabled={submitting || phone.trim().length < 9}
+              className="rounded-2xl bg-emerald-700 py-3.5 font-bold text-white disabled:opacity-40"
+            >
+              {submitting ? "שולח..." : "שליחת קוד אימות"}
+            </button>
+
+            {(providers.google || providers.apple) && (
+              <>
+                <div className="flex items-center gap-3 text-xs text-stone-400 py-1">
+                  <span className="h-px flex-1 bg-stone-200" />
+                  או
+                  <span className="h-px flex-1 bg-stone-200" />
+                </div>
+                {providers.google && (
+                  <a
+                    href={oauthHref("google")}
+                    className="flex items-center justify-center gap-2 rounded-2xl border border-stone-300 py-3 font-semibold text-stone-700"
+                  >
+                    <span>🔵</span>
+                    המשך עם Google
+                  </a>
+                )}
+                {providers.apple && (
+                  <a
+                    href={oauthHref("apple")}
+                    className="flex items-center justify-center gap-2 rounded-2xl border border-stone-300 py-3 font-semibold text-stone-700"
+                  >
+                    <span></span>
+                    המשך עם Apple
+                  </a>
+                )}
+              </>
+            )}
+          </>
         ) : (
           <>
             <button

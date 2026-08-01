@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
       certificateNumber: true,
       certificateExpiryDate: true,
       certificateVerified: true,
-      owner: { select: { phone: true } },
+      owner: { select: { phone: true, email: true } },
     },
   });
 
@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
       certificateExpiryDate: r.certificateExpiryDate.toISOString(),
       certificateVerified: r.certificateVerified,
       ownerPhone: r.owner?.phone ?? null,
+      ownerEmail: r.owner?.email ?? null,
     }))
   );
 }

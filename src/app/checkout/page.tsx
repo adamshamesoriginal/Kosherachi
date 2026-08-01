@@ -38,7 +38,7 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- prefilling from the account once user loads
-    if (user && !phoneTouched) setPhone(user.phone);
+    if (user?.phone && !phoneTouched) setPhone(user.phone);
   }, [user, phoneTouched]);
 
   if (cart.length === 0 || authLoading || !user) {

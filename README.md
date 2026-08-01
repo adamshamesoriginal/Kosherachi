@@ -58,6 +58,58 @@ couple of things to know before flipping it on for real users:
   create an OTP record — so a failed send doesn't burn the user's resend
   cooldown on a code they never got.
 
+**Google and Apple sign-in** are also wired up (`src/lib/google-oauth.ts`,
+`src/lib/apple-oauth.ts`), as alternatives to phone+OTP, not replacements —
+all three log into the same `User`/`Session` system, so `phone` is now
+optional and `email`/`googleId`/`appleId` exist alongside it. Hand-rolled
+OAuth 2.0 / OpenID Connect (no NextAuth/Auth.js), using
+[`jose`](https://github.com/panva/jose) for real JWKS-based `id_token`
+signature verification rather than just decoding the payload. Turn Google on
+with:
+
+```
+GOOGLE_CLIENT_ID=xxxxxxxxxx.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your_client_secret
+```
+
+(from a Google Cloud Console OAuth 2.0 Client ID — Web application type —
+with `{your origin}/api/auth/google/callback` added as an authorized
+redirect URI, e.g. `https://koshergo.example.com/api/auth/google/callback`).
+
+Apple is the same idea but with meaningfully more setup — it needs a paid
+Apple Developer Program membership ($99/yr), a registered Services ID (used
+as the client ID), a Sign in with Apple key (private key + Key ID) from
+that account's Keys section, your Team ID, and the redirect domain verified
+with Apple:
+
+```
+APPLE_CLIENT_ID=com.yourcompany.koshergo.web   # the Services ID
+APPLE_TEAM_ID=XXXXXXXXXX
+APPLE_KEY_ID=XXXXXXXXXX
+APPLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIGTAgEAMBMGByq...\n-----END PRIVATE KEY-----"
+```
+
+(`APPLE_PRIVATE_KEY` is the `.p8` file's contents with real newlines
+replaced by literal `\n`, since most env var systems don't accept multi-line
+values — the code un-escapes them before use.) Unlike Twilio's static API
+key, Apple's `client_secret` is a JWT the server signs itself per request
+using that private key (ES256) — implemented and unit-tested against a
+throwaway key pair, since there's no Apple account in this environment to
+test against the real endpoint.
+
+Each provider only appears as a button on `/auth` when
+`GET /api/auth/providers` reports it configured — no dead buttons pointing
+at a provider that isn't set up. Same transparency principle as SMS: **no
+Google or Apple app is registered in this environment**, so neither has
+been exercised end to end against the real provider (Google's real
+`accounts.google.com` consent screen or Apple's real sign-in). What's been
+verified instead: the authorize-URL construction and CSRF state cookie
+(inspected directly), the not-configured redirect, a live call to Google's
+real token endpoint that correctly gets rejected for a fake `client_id`
+(exercises the whole request → parse-failure → clean-redirect path), and
+the Apple JWT signing round-tripping through `jose`'s own verifier with a
+generated test key.
+
 ## Getting started
 
 ```bash
@@ -133,6 +185,9 @@ above).
 | `POST /api/auth/verify-otp` | Check the code (max 5 attempts, 5 min expiry); creates the user on first login and sets the session cookie |
 | `GET /api/auth/me` | Current logged-in user from the session cookie, or `null` |
 | `POST /api/auth/logout` | Deletes the session and clears the cookie |
+| `GET /api/auth/providers` | `{ google, apple }` — which OAuth buttons `/auth` should render |
+| `GET /api/auth/google/start`, `GET /api/auth/google/callback` | Redirects to Google's consent screen; handles the return, verifies the `id_token`, signs in |
+| `GET /api/auth/apple/start`, `POST /api/auth/apple/callback` | Same for Apple — callback is POST because Apple's `form_post` response mode is required when requesting name/email |
 | `GET /api/restaurants` | List **published** restaurants; filters via `area`, `kashrut` (csv), `foodType` (csv), `q` |
 | `GET /api/restaurants/[id]` | Single restaurant with menu + reviews; 404 if unpublished |
 | `POST /api/orders` | Create an order for the logged-in user (401 otherwise); server re-prices items from the DB (never trusts client prices) and enforces the restaurant's minimum order |
@@ -188,9 +243,12 @@ sign-off.
   above) but untested against a real account — there isn't one connected in
   this environment. Add credentials and send yourself a code before trusting
   it with real users.
+- **Google/Apple sign-in**: implemented (see the Stack section above) but
+  untested against real provider infrastructure — there's no Google Cloud
+  or Apple Developer app registered in this environment. Register both,
+  add credentials, and sign in yourself before trusting it with real users.
 - **Auth hardening**: OTPs are stored in plain text in `OtpCode` (fine for a
-  short-lived 6-digit code, but hash them for defense in depth), and there's
-  no Apple/Google sign-in yet, per the original product plan.
+  short-lived 6-digit code, but hash them for defense in depth).
 - **Admin gating**: `/admin` is phone-allowlist gated (`ADMIN_PHONES`), not
   a real role/permission system — fine for one or two trusted people
   reviewing applications by hand, not for a larger internal team.

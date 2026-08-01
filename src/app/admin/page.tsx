@@ -16,6 +16,7 @@ interface AdminRestaurant {
   certificateExpiryDate: string;
   certificateVerified: boolean;
   ownerPhone: string | null;
+  ownerEmail: string | null;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -143,7 +144,9 @@ function ApplicationsTab() {
           <p className="text-xs text-stone-500">
             ח.פ/עוסק: {app.businessId} · אזור: {app.area}
           </p>
-          <p className="text-xs text-stone-500" dir="ltr">{app.applicantPhone}</p>
+          <p className="text-xs text-stone-500" dir="ltr">
+            {app.applicantPhone ?? app.applicantEmail ?? "—"}
+          </p>
           <p className="text-xs text-stone-400">
             {new Date(app.createdAt).toLocaleString("he-IL")}
           </p>
@@ -227,7 +230,7 @@ function RestaurantsTab() {
             </span>
           </div>
           <p className="text-xs text-stone-500">
-            {r.area} · בעלים: <span dir="ltr">{r.ownerPhone ?? "—"}</span>
+            {r.area} · בעלים: <span dir="ltr">{r.ownerPhone ?? r.ownerEmail ?? "—"}</span>
           </p>
           <p className="text-xs text-stone-500">
             {r.certifyingBody || "—"} · {r.certificateNumber || "—"} · תוקף עד{" "}

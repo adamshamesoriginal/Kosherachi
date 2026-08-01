@@ -38,7 +38,9 @@ export default function MorePage() {
           <>
             <div>
               <p className="text-xs text-stone-500">מחוברים כ</p>
-              <p className="font-semibold text-stone-900" dir="ltr">{user.phone}</p>
+              <p className="font-semibold text-stone-900" dir="ltr">
+                {user.phone ?? user.email ?? user.name ?? "—"}
+              </p>
             </div>
             <button
               onClick={async () => {

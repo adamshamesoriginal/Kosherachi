@@ -19,7 +19,8 @@ function adminPhones(): string[] {
     .filter(Boolean);
 }
 
-export function isAdminPhone(phone: string): boolean {
+export function isAdminPhone(phone: string | null): boolean {
+  if (!phone) return false;
   return adminPhones().includes(phone);
 }
 
