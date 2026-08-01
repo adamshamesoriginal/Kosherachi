@@ -31,10 +31,22 @@ export async function POST(request: NextRequest) {
   }
 
   const code = generateOtpCode();
+
+  // Send before persisting: if the provider rejects it, the user gets a clear
+  // error and can retry immediately instead of being stuck in the resend
+  // cooldown for a code they never received.
+  try {
+    await sendOtpSms(phone, code);
+  } catch {
+    return NextResponse.json(
+      { error: "שליחת הקוד נכשלה, נסו שוב בעוד רגע" },
+      { status: 502 }
+    );
+  }
+
   await prisma.otpCode.create({
     data: { phone, code, expiresAt: new Date(Date.now() + OTP_TTL_MS) },
   });
-  await sendOtpSms(phone, code);
 
   return NextResponse.json({
     ok: true,

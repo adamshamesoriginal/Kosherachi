@@ -28,13 +28,35 @@ touches personal data (`/api/orders*`) reads the logged-in user from that
 cookie server-side — the client never gets to claim an identity by passing
 an id in the request.
 
-**No real SMS provider is wired up** (no Twilio account/keys in this
-environment). `src/lib/sms.ts` logs the OTP server-side and, only while
-`SMS_DEV_MODE` is on (i.e. no `SMS_PROVIDER_API_KEY` env var is set), the
-`/api/auth/request-otp` response includes the code so the login screen can
-show it — clearly labeled as demo mode, not hidden. To go live, implement
-`sendOtpSms` to call a real provider and set `SMS_PROVIDER_API_KEY`, which
-turns dev mode off automatically.
+**SMS is sent via Twilio** (`src/lib/sms.ts`, plain REST call — no SDK
+dependency) when credentials are configured. Set these env vars to turn it
+on:
+
+```
+TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_AUTH_TOKEN=your_auth_token
+TWILIO_FROM_NUMBER=+15551234567        # a number you bought in the Twilio console
+# — or, if you're using a Messaging Service instead of a single number —
+TWILIO_MESSAGING_SERVICE_SID=MGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+**No Twilio account is connected in this environment** — I don't have (and
+can't create) one on your behalf, so this hasn't been tested against a real
+send. Without those env vars set, `SMS_DEV_MODE` stays on: `/api/auth/request-otp`
+logs the code server-side and echoes it back to the login screen instead,
+clearly labeled as demo mode — this is what lets the whole flow work today
+without an account. Once you add real credentials (as local env vars, or as
+secrets in whatever platform you deploy to — never committed to git),
+`SMS_DEV_MODE` turns off automatically and codes go out as real texts. A
+couple of things to know before flipping it on for real users:
+
+- Twilio trial accounts can only text phone numbers you've manually
+  verified in the console — good enough to test with your own phone, not
+  for real signups until you upgrade to a paid account.
+- If `sendOtpSms` throws (bad credentials, no balance, unverified number in
+  trial mode, etc.), `/api/auth/request-otp` returns a 502 and does **not**
+  create an OTP record — so a failed send doesn't burn the user's resend
+  cooldown on a code they never got.
 
 ## Getting started
 
@@ -131,9 +153,10 @@ sign-off.
   (e.g. Vercel). For production, point `datasource db` in
   `prisma/schema.prisma` at a hosted Postgres instance (Vercel Postgres,
   Neon, Supabase) — the rest of the app (routes, serializers) doesn't change.
-- **SMS delivery**: OTPs are logged server-side and echoed back to the login
-  screen in dev mode instead of actually being texted (see the Stack section
-  above) — swap in a real provider (Twilio etc.) before real users rely on it.
+- **SMS delivery**: Twilio integration is implemented (see the Stack section
+  above) but untested against a real account — there isn't one connected in
+  this environment. Add credentials and send yourself a code before trusting
+  it with real users.
 - **Auth hardening**: OTPs are stored in plain text in `OtpCode` (fine for a
   short-lived 6-digit code, but hash them for defense in depth), and there's
   no Apple/Google sign-in yet, per the original product plan.
