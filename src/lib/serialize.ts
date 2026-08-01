@@ -15,6 +15,7 @@ import {
   OrderStatus,
   PartnerApplication,
   PartnerApplicationStatus,
+  PaymentStatus,
   Restaurant,
   Review,
 } from "./types";
@@ -108,6 +109,7 @@ export function serializeOrder(o: OrderWithItems): Order {
     total: o.total,
     address: o.address,
     status: o.status as OrderStatus,
+    paymentStatus: o.paymentStatus as PaymentStatus,
     createdAt: o.createdAt.toISOString(),
     pickupOrDelivery: o.pickupOrDelivery as "delivery" | "pickup",
   };

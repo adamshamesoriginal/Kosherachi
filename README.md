@@ -10,7 +10,8 @@ expiry date, and a photo of the teudat kashrut) displayed on the spot.
 An onboarding flow, a filtered restaurant list, a restaurant/menu page,
 cart, checkout, and order tracking, plus a restaurant-owner dashboard for
 managing orders and menus — all backed by a real database via API routes.
-No payments or live courier integrations yet.
+Checkout redirects to a real hosted payment page (Meshulam) when configured;
+no live courier integration yet.
 
 ## Stack
 
@@ -110,6 +111,67 @@ real token endpoint that correctly gets rejected for a fake `client_id`
 the Apple JWT signing round-tripping through `jose`'s own verifier with a
 generated test key.
 
+**Payments go through Meshulam** (`src/lib/meshulam.ts`), an Israeli hosted
+payment page provider — checkout creates a `pending` order, then redirects
+the browser to a Meshulam-hosted page for card entry, so card data never
+touches KosherGo's servers (PCI SAQ A, the lightest self-assessment tier).
+Turn it on with:
+
+```
+MESHULAM_USER_ID=xxxxxxxx
+MESHULAM_PAGE_CODE=xxxxxxxx
+MESHULAM_API_KEY=xxxxxxxx
+MESHULAM_ENV=sandbox        # or "production"; defaults to sandbox
+```
+
+Without these set, checkout falls back to the original demo behavior:
+orders are created already `paid`, no redirect happens — this is what lets
+the whole flow work today without a merchant account.
+
+**Important caveat**: Meshulam's official API docs were not reachable from
+this environment (every doc host tried returned a 403 from bot protection,
+and the request/response field names in `src/lib/meshulam.ts` — the
+`createPaymentProcess` request shape, the response envelope, the
+`getProcessDetails` status-check endpoint — are **unverified against the
+real API**, marked with `TODO(verify)` comments at each assumption. What
+*is* solid is the surrounding architecture, which doesn't depend on getting
+those field names exactly right on the first try:
+
+- The webhook (`POST /api/payments/meshulam/webhook`) never trusts the
+  payment status claimed in the callback body. It only uses the callback to
+  learn *which* order to check, then re-verifies the real status directly
+  against Meshulam using our own server-side credentials
+  (`fetchTransactionStatus`) — the actual security boundary. This means an
+  attacker who guesses or replays a webhook payload can't mark an order
+  paid; only a real, credential-authenticated status check can.
+- The webhook is idempotent — a re-delivered callback for an already-`paid`
+  order short-circuits instead of re-processing.
+- `paymentStatus` (`pending` / `paid` / `failed` / `refunded`) is tracked
+  separately from delivery `status`. The restaurant dashboard
+  (`GET /api/dashboard/orders`) only ever returns `paid` orders, so a
+  kitchen never starts on food nobody's paid for. The customer's
+  `/order/[id]` page shows a dedicated waiting screen while `pending` and a
+  "payment failed, your cart is safe" screen while `failed`, instead of the
+  normal delivery-status stepper.
+- If `createPaymentPage()` itself fails (bad credentials, provider down),
+  checkout returns a clean error and **no order row is created** — no
+  orphaned pending orders left behind by a failed attempt.
+
+Tested in this environment: real network calls to
+`sandbox.meshulam.co.il` are blocked by the sandbox's egress proxy (the same
+restriction that blocks Twilio and Apple), so the actual request/response
+contract couldn't be exercised against the live API. What *was* verified —
+demo-mode checkout (unchanged regression), a configured-but-unreachable
+provider correctly producing a clean checkout error with no orphaned order,
+and the full webhook → dashboard-visibility → customer-UI chain end to end
+by manually driving an order through `pending` → `paid` → `failed` and
+confirming each surface (webhook idempotency, dashboard filtering, both
+customer-facing waiting/failure screens) reacts correctly. Before accepting
+real payments: get a Meshulam sandbox account, point `MESHULAM_ENV=sandbox`
+at it, run one real transaction end to end, and correct any field-name
+mismatch that surfaces (isolated entirely to `src/lib/meshulam.ts` by
+design).
+
 ## Getting started
 
 ```bash
@@ -190,7 +252,8 @@ above).
 | `GET /api/auth/apple/start`, `POST /api/auth/apple/callback` | Same for Apple — callback is POST because Apple's `form_post` response mode is required when requesting name/email |
 | `GET /api/restaurants` | List **published** restaurants; filters via `area`, `kashrut` (csv), `foodType` (csv), `q` |
 | `GET /api/restaurants/[id]` | Single restaurant with menu + reviews; 404 if unpublished |
-| `POST /api/orders` | Create an order for the logged-in user (401 otherwise); server re-prices items from the DB (never trusts client prices) and enforces the restaurant's minimum order |
+| `POST /api/orders` | Create an order for the logged-in user (401 otherwise); server re-prices items from the DB (never trusts client prices) and enforces the restaurant's minimum order. When Meshulam is configured, opens a hosted payment page first and returns `redirectUrl`; the order starts `paymentStatus: "pending"` |
+| `POST /api/payments/meshulam/webhook` | Meshulam's async payment callback — re-verifies the real status server-to-server rather than trusting the callback body, then marks the order `paid` or `failed`; idempotent |
 | `GET /api/orders` | The logged-in user's order history |
 | `GET /api/orders/[id]` | Single order, restricted to its owner (403 for anyone else); status is the real, restaurant-set value — the client polls to reflect updates the restaurant makes |
 | `GET/POST /api/partner-applications` | The logged-in user's own applications / submit a new one |
@@ -252,9 +315,12 @@ sign-off.
 - **Admin gating**: `/admin` is phone-allowlist gated (`ADMIN_PHONES`), not
   a real role/permission system — fine for one or two trusted people
   reviewing applications by hand, not for a larger internal team.
-- **Payments**: the checkout form is a visual mock — no card data is
-  transmitted or stored. A production build needs a licensed Israeli
-  payment processor (PCI DSS compliant).
+- **Payments**: Meshulam integration is implemented (see the Stack section
+  above) but untested against a real merchant account or the live API
+  contract — there isn't one connected in this environment, and Meshulam's
+  docs weren't reachable to confirm exact field names. Get a sandbox
+  account, run one real transaction, and fix any field-name mismatch
+  (isolated to `src/lib/meshulam.ts`) before trusting it with real users.
 - **Delivery**: order status is set manually by the restaurant via the
   dashboard, not fed by real courier GPS/tracking data. A live courier
   integration would update status automatically instead of by button click.

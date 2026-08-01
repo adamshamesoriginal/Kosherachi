@@ -79,6 +79,8 @@ export type OrderStatus =
   | "out_for_delivery"
   | "delivered";
 
+export type PaymentStatus = "pending" | "paid" | "failed" | "refunded";
+
 export interface Order {
   id: string;
   restaurantId: string;
@@ -91,6 +93,7 @@ export interface Order {
   total: number;
   address: string;
   status: OrderStatus;
+  paymentStatus: PaymentStatus;
   createdAt: string;
   pickupOrDelivery: "delivery" | "pickup";
 }

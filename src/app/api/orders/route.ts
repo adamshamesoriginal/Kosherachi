@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 import { serializeOrder } from "@/lib/serialize";
 import { SERVICE_FEE, VAT_RATE } from "@/lib/pricing";
+import { createPaymentPage, MESHULAM_CONFIGURED } from "@/lib/meshulam";
 
 interface CreateOrderBody {
   restaurantId: string;
@@ -87,6 +88,38 @@ export async function POST(request: NextRequest) {
   const vat = total - total / (1 + VAT_RATE);
 
   const orderId = `KG-${randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase()}`;
+  const address =
+    body.pickupOrDelivery === "delivery" ? body.address! : `איסוף עצמי: ${restaurant.address}`;
+
+  // With no payment provider configured, orders complete instantly (demo
+  // mode) — same behavior the app has always had. With Meshulam configured,
+  // the order starts "pending" and only becomes visible to the restaurant
+  // once the webhook confirms it — see src/lib/meshulam.ts.
+  let paymentTransactionId: string | undefined;
+  let redirectUrl: string | undefined;
+
+  if (MESHULAM_CONFIGURED) {
+    try {
+      const payment = await createPaymentPage({
+        orderId,
+        amountIls: total,
+        description: `הזמנה מ${restaurant.name}`,
+        customerName: user.name ?? "לקוח KosherGo",
+        customerPhone: body.phone,
+        successUrl: `${request.nextUrl.origin}/order/${orderId}`,
+        cancelUrl: `${request.nextUrl.origin}/cart`,
+        webhookUrl: `${request.nextUrl.origin}/api/payments/meshulam/webhook`,
+      });
+      paymentTransactionId = payment.transactionId;
+      redirectUrl = payment.paymentUrl;
+    } catch (err) {
+      console.error("[orders] failed to start Meshulam payment", err);
+      return NextResponse.json(
+        { error: "פתיחת התשלום נכשלה, נסו שוב" },
+        { status: 502 }
+      );
+    }
+  }
 
   const order = await prisma.order.create({
     data: {
@@ -99,12 +132,12 @@ export async function POST(request: NextRequest) {
       serviceFee: SERVICE_FEE,
       vat,
       total,
-      address:
-        body.pickupOrDelivery === "delivery"
-          ? body.address!
-          : `איסוף עצמי: ${restaurant.address}`,
+      address,
       phone: body.phone,
       pickupOrDelivery: body.pickupOrDelivery,
+      paymentStatus: MESHULAM_CONFIGURED ? "pending" : "paid",
+      paymentProvider: MESHULAM_CONFIGURED ? "meshulam" : null,
+      paymentTransactionId,
       items: {
         create: orderItemsInput.map(({ menuItem, quantity }) => ({
           menuItemId: menuItem.id,
@@ -117,5 +150,8 @@ export async function POST(request: NextRequest) {
     include: { items: { include: { menuItem: true } } },
   });
 
-  return NextResponse.json(serializeOrder(order), { status: 201 });
+  return NextResponse.json(
+    { ...serializeOrder(order), redirectUrl },
+    { status: 201 }
+  );
 }

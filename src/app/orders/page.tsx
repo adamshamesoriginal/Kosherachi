@@ -13,6 +13,18 @@ const STATUS_LABEL: Record<string, string> = {
   delivered: "נמסרה",
 };
 
+function orderBadge(o: Order): { label: string; color: string } {
+  if (o.paymentStatus === "pending") {
+    return { label: "ממתין לתשלום", color: "bg-stone-100 text-stone-500" };
+  }
+  if (o.paymentStatus === "failed") {
+    return { label: "התשלום נכשל", color: "bg-red-100 text-red-700" };
+  }
+  return o.status === "delivered"
+    ? { label: STATUS_LABEL[o.status], color: "bg-emerald-100 text-emerald-700" }
+    : { label: STATUS_LABEL[o.status], color: "bg-amber-100 text-amber-700" };
+}
+
 export default function OrdersPage() {
   const { user, authLoading } = useApp();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -61,7 +73,9 @@ export default function OrdersPage() {
       )}
 
       <div className="flex flex-col gap-3">
-        {orders.map((o) => (
+        {orders.map((o) => {
+          const badge = orderBadge(o);
+          return (
           <Link
             key={o.id}
             href={`/order/${o.id}`}
@@ -69,14 +83,8 @@ export default function OrdersPage() {
           >
             <div className="flex justify-between items-center">
               <span className="font-bold text-stone-900">{o.restaurantName}</span>
-              <span
-                className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                  o.status === "delivered"
-                    ? "bg-emerald-100 text-emerald-700"
-                    : "bg-amber-100 text-amber-700"
-                }`}
-              >
-                {STATUS_LABEL[o.status]}
+              <span className={`text-xs font-semibold px-2 py-1 rounded-full ${badge.color}`}>
+                {badge.label}
               </span>
             </div>
             <p className="text-xs text-stone-500">
@@ -89,7 +97,8 @@ export default function OrdersPage() {
               </span>
             </div>
           </Link>
-        ))}
+          );
+        })}
       </div>
     </main>
   );

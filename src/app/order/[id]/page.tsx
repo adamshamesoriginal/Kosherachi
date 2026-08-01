@@ -2,7 +2,8 @@
 
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useApp } from "@/context/AppContext";
 import { Order, OrderStatus } from "@/lib/types";
 
 const STATUS_FLOW: { id: OrderStatus; label: string; icon: string }[] = [
@@ -16,10 +17,15 @@ const STATUS_FLOW: { id: OrderStatus; label: string; icon: string }[] = [
 export default function OrderTrackingPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const { clearCart } = useApp();
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [unauthorized, setUnauthorized] = useState(false);
+  // The cart isn't cleared at checkout anymore (see /checkout) so a
+  // cancelled/failed payment doesn't lose it — it's only cleared once we
+  // actually see this order confirmed paid.
+  const clearedCartRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,6 +68,13 @@ export default function OrderTrackingPage() {
     if (unauthorized) router.replace(`/auth?next=/order/${params.id}`);
   }, [unauthorized, router, params.id]);
 
+  useEffect(() => {
+    if (order?.paymentStatus === "paid" && !clearedCartRef.current) {
+      clearedCartRef.current = true;
+      clearCart();
+    }
+  }, [order?.paymentStatus, clearCart]);
+
   if (loading || unauthorized) {
     return (
       <main className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center text-stone-400">
@@ -76,6 +89,37 @@ export default function OrderTrackingPage() {
         <p className="font-semibold text-stone-700">ההזמנה לא נמצאה</p>
         <Link href="/home" className="text-emerald-700 underline">
           חזרה לדף הבית
+        </Link>
+      </main>
+    );
+  }
+
+  if (order.paymentStatus === "pending") {
+    return (
+      <main className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center">
+        <span className="text-3xl">⏳</span>
+        <p className="font-semibold text-stone-700">ממתינים לאישור תשלום</p>
+        <p className="text-sm text-stone-500 max-w-xs">
+          ברגע שהתשלום יאושר, ההזמנה תעבור אוטומטית למסעדה. העמוד הזה מתעדכן
+          בעצמו — אין צורך לרענן.
+        </p>
+      </main>
+    );
+  }
+
+  if (order.paymentStatus === "failed") {
+    return (
+      <main className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center">
+        <span className="text-3xl">⚠️</span>
+        <p className="font-semibold text-stone-700">התשלום לא הושלם</p>
+        <p className="text-sm text-stone-500 max-w-xs">
+          ההזמנה לא נשלחה למסעדה. העגלה שלכם עדיין שמורה — אפשר לנסות שוב.
+        </p>
+        <Link
+          href="/cart"
+          className="mt-2 rounded-2xl bg-emerald-700 text-white font-bold px-6 py-3"
+        >
+          חזרה לעגלה
         </Link>
       </main>
     );

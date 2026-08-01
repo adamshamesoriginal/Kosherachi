@@ -16,12 +16,11 @@ export default function CheckoutPage() {
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
   const [phoneTouched, setPhoneTouched] = useState(false);
-  const [cardNumber, setCardNumber] = useState("");
   const [placing, setPlacing] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  // Clearing the cart after a successful order also makes cart.length hit 0,
-  // which would otherwise trigger the empty-cart redirect below and race
-  // with the navigation to the order page.
+  // Redirecting to the payment provider (or, in demo mode, to the order
+  // page) also empties the cart eventually, which would otherwise trigger
+  // the empty-cart redirect below and race with that navigation.
   const orderPlacedRef = useRef(false);
 
   useEffect(() => {
@@ -57,10 +56,7 @@ export default function CheckoutPage() {
   const total = cartTotal + deliveryFee + SERVICE_FEE;
   const vatIncluded = total - total / (1 + VAT_RATE);
 
-  const canSubmit =
-    (mode === "pickup" || address.trim().length > 3) &&
-    phone.trim().length >= 9 &&
-    cardNumber.replace(/\s/g, "").length >= 12;
+  const canSubmit = (mode === "pickup" || address.trim().length > 3) && phone.trim().length >= 9;
 
   const placeOrder = async () => {
     if (!canSubmit || placing) return;
@@ -84,6 +80,16 @@ export default function CheckoutPage() {
       }
       const order = await res.json();
       orderPlacedRef.current = true;
+      if (order.redirectUrl) {
+        // Full-page navigation to the hosted payment page — the cart stays
+        // intact in localStorage until payment is actually confirmed (see
+        // the order tracking page), so cancelling and coming back doesn't
+        // lose it.
+        window.location.href = order.redirectUrl;
+        return;
+      }
+      // No payment provider configured (demo mode): the order is already
+      // marked paid, same as the app has always behaved.
       clearCart();
       router.push(`/order/${order.id}`);
     } catch (err) {
@@ -152,22 +158,6 @@ export default function CheckoutPage() {
           />
         </section>
 
-        <section className="flex flex-col gap-2">
-          <h2 className="font-semibold text-sm text-stone-700">אמצעי תשלום</h2>
-          <input
-            value={cardNumber}
-            onChange={(e) => setCardNumber(e.target.value)}
-            placeholder="מספר כרטיס אשראי (הדגמה בלבד)"
-            inputMode="numeric"
-            className="rounded-xl border border-stone-200 px-4 py-2.5 text-sm outline-none focus:border-emerald-500"
-          />
-          <p className="text-[11px] text-stone-400">
-            זהו אב-טיפוס להדגמה בלבד — לא מתבצע חיוב אמיתי ופרטי התשלום אינם
-            נשמרים. באפליקציה חיה יחובר ספק סליקה מורשה בישראל בהתאם לתקן
-            PCI DSS.
-          </p>
-        </section>
-
         <section className="rounded-2xl border border-stone-200 bg-white p-4 flex flex-col gap-1.5 text-sm">
           <div className="flex justify-between text-stone-600">
             <span>סכום ביניים</span>
@@ -190,6 +180,11 @@ export default function CheckoutPage() {
             <span>₪{total.toFixed(2)}</span>
           </div>
         </section>
+
+        <p className="text-[11px] text-stone-400 leading-relaxed">
+          התשלום מתבצע בעמוד מאובטח של ספק הסליקה — פרטי האשראי שלכם לא
+          עוברים דרך שרתי KosherGo.
+        </p>
 
         {submitError && (
           <p className="text-sm text-red-600 text-center">{submitError}</p>
@@ -214,7 +209,7 @@ export default function CheckoutPage() {
           disabled={!canSubmit || placing}
           className="w-full rounded-2xl bg-emerald-700 py-3.5 font-bold text-white disabled:opacity-40"
         >
-          {placing ? "מבצע הזמנה..." : `בצעו הזמנה · ₪${total.toFixed(0)}`}
+          {placing ? "מעביר לתשלום..." : `מעבר לתשלום מאובטח · ₪${total.toFixed(0)}`}
         </button>
       </div>
     </main>

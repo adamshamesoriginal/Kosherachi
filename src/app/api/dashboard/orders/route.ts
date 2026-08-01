@@ -15,8 +15,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: result.error }, { status: statusForError(result.error) });
   }
 
+  // Unpaid orders never reach the restaurant's queue — no risk of a kitchen
+  // starting on food nobody's paid for.
   const orders = await prisma.order.findMany({
-    where: { restaurantId },
+    where: { restaurantId, paymentStatus: "paid" },
     include: { items: { include: { menuItem: true } } },
     orderBy: { createdAt: "desc" },
   });

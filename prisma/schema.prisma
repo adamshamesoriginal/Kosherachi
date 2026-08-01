@@ -88,9 +88,18 @@ model Order {
   status            String   @default("placed")
   createdAt         DateTime @default(now())
 
+  // Payment is separate from fulfillment status above: an order exists (and
+  // is visible to its customer) before payment completes, but shouldn't
+  // reach the restaurant's queue until paymentStatus is confirmed paid by
+  // the provider's async webhook — never by trusting the browser redirect.
+  paymentStatus        String  @default("pending") // pending | paid | failed | refunded
+  paymentProvider      String? // "meshulam"
+  paymentTransactionId String? @unique // Meshulam's process/transaction id, used to match the webhook back to this order
+
   items OrderItem[]
 
   @@index([userId])
+  @@index([paymentStatus])
 }
 
 model User {
