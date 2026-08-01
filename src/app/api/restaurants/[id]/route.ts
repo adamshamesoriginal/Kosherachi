@@ -12,7 +12,7 @@ export async function GET(
     include: { menuItems: { where: { available: true } }, reviews: true },
   });
 
-  if (!restaurant) {
+  if (!restaurant || !restaurant.published) {
     return NextResponse.json({ error: "Restaurant not found" }, { status: 404 });
   }
 

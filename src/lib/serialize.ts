@@ -4,6 +4,8 @@ import type {
   Review as DbReview,
   Order as DbOrder,
   OrderItem as DbOrderItem,
+  PartnerApplication as DbPartnerApplication,
+  User as DbUser,
 } from "@prisma/client";
 import {
   FoodType,
@@ -11,6 +13,8 @@ import {
   MenuItem,
   Order,
   OrderStatus,
+  PartnerApplication,
+  PartnerApplicationStatus,
   Restaurant,
   Review,
 } from "./types";
@@ -69,6 +73,7 @@ export function serializeRestaurant(r: RestaurantWithRelations): Restaurant {
     deliveryFee: r.deliveryFee,
     minOrder: r.minOrder,
     selfDelivery: r.selfDelivery,
+    published: r.published,
     menu: r.menuItems.map(serializeMenuItem),
     reviews: r.reviews.map(serializeReview),
   };
@@ -105,5 +110,24 @@ export function serializeOrder(o: OrderWithItems): Order {
     status: o.status as OrderStatus,
     createdAt: o.createdAt.toISOString(),
     pickupOrDelivery: o.pickupOrDelivery as "delivery" | "pickup",
+  };
+}
+
+type PartnerApplicationWithApplicant = DbPartnerApplication & { applicant: DbUser };
+
+export function serializePartnerApplication(
+  a: PartnerApplicationWithApplicant
+): PartnerApplication {
+  return {
+    id: a.id,
+    applicantPhone: a.applicant.phone,
+    businessName: a.businessName,
+    businessId: a.businessId,
+    area: a.area,
+    status: a.status as PartnerApplicationStatus,
+    reviewNote: a.reviewNote,
+    restaurantId: a.restaurantId,
+    createdAt: a.createdAt.toISOString(),
+    reviewedAt: a.reviewedAt ? a.reviewedAt.toISOString() : null,
   };
 }

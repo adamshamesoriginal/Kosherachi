@@ -61,6 +61,7 @@ export interface Restaurant {
   deliveryFee: number; // ILS, 0 = free
   minOrder: number;
   selfDelivery: boolean; // restaurant delivers itself vs external courier
+  published?: boolean; // visible to customers; false while the owner is still setting up
   menu: MenuItem[];
   reviews: Review[];
 }
@@ -92,4 +93,19 @@ export interface Order {
   status: OrderStatus;
   createdAt: string;
   pickupOrDelivery: "delivery" | "pickup";
+}
+
+export type PartnerApplicationStatus = "pending" | "approved" | "rejected";
+
+export interface PartnerApplication {
+  id: string;
+  applicantPhone: string;
+  businessName: string;
+  businessId: string;
+  area: string;
+  status: PartnerApplicationStatus;
+  reviewNote: string | null;
+  restaurantId: string | null;
+  createdAt: string;
+  reviewedAt: string | null;
 }

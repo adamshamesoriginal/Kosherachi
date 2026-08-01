@@ -82,11 +82,36 @@ menus and orders.
 restaurant list + search) → `/restaurant/[id]` (menu, kashrut certificate
 tab, reviews) → `/cart` → `/checkout` (requires login; redirects to
 `/auth?next=/checkout` otherwise) → `/order/[id]` (live status tracker,
-polling the API). `/partner` is the restaurant-owner signup form (lead
-capture only — see below). `/more` shows the logged-in phone number +
-logout, and links to the legal pages below and, if the account owns a
-restaurant, to `/dashboard`. Browsing restaurants doesn't require login —
-only placing an order and viewing order history do.
+polling the API). `/more` shows the logged-in phone number + logout, and
+links to the legal pages below plus, depending on the account, `/dashboard`
+and/or `/admin`. Browsing restaurants doesn't require login — only placing
+an order, viewing order history, or applying as a partner do.
+
+**Becoming a restaurant owner** is a full loop now, not just a seed-script
+assignment:
+
+1. A logged-in user applies at `/partner` (business name, business number,
+   area — their already-verified phone is reused as the contact). `/partner`
+   also lists that user's own past applications with their status.
+2. An admin (see below) reviews it at `/admin` and approves or rejects.
+   Approving creates a real `Restaurant` owned by the applicant —
+   **unpublished**, with placeholder images/defaults, since none of the real
+   details (address, menu, kashrut certificate) exist yet.
+3. The new owner opens `/dashboard/[id]` → **פרטי העסק** to fill in name,
+   address, cuisine, food types (meat/dairy/parve), delivery settings, and
+   kashrut certificate info, and → **תפריט** to add at least one menu item.
+4. Once name, address, at least one food type, and at least one menu item
+   are set, the owner can flip **פרסום** (publish) in settings — the
+   restaurant then appears in customer search. The kashrut certificate's
+   "verified" checkmark stays off until an admin manually confirms it at
+   `/admin` (owners can't self-verify their own certificate — that would
+   defeat the point).
+
+**Admin access** is gated by phone number, not a separate role system:
+`ADMIN_PHONES` (comma-separated) in env vars, or the demo default
+`0501110000` (printed by the seed script) if unset. `/admin` has two tabs:
+approve/reject partner applications, and toggle each restaurant's kashrut
+`certificateVerified` flag after reviewing it.
 
 Restaurant owners get `/dashboard` (redirects straight into the one owned
 restaurant, or lists them if there's more than one) → `/dashboard/[id]`
@@ -95,9 +120,10 @@ it to the next status — placed → confirmed → preparing → out for deliver
 → delivered; this is what actually drives the customer's tracking page,
 there's no more time-based auto-simulation), **תפריט** (add menu items,
 edit existing ones, toggle an item unavailable so customers stop seeing it
-without deleting its order history), and **פרטי העסק** (delivery fee,
-minimum order, delivery time window, self-delivery toggle, and the kashrut
-certificate's level/body/number/expiry).
+without deleting its order history), and **פרטי העסק** (name, address,
+cuisine, food types, delivery fee/minimum/time window, self-delivery
+toggle, kashrut certificate fields, and the publish toggle described
+above).
 
 ## API routes
 
@@ -107,18 +133,23 @@ certificate's level/body/number/expiry).
 | `POST /api/auth/verify-otp` | Check the code (max 5 attempts, 5 min expiry); creates the user on first login and sets the session cookie |
 | `GET /api/auth/me` | Current logged-in user from the session cookie, or `null` |
 | `POST /api/auth/logout` | Deletes the session and clears the cookie |
-| `GET /api/restaurants` | List restaurants; filters via `area`, `kashrut` (csv), `foodType` (csv), `q` |
-| `GET /api/restaurants/[id]` | Single restaurant with menu + reviews |
+| `GET /api/restaurants` | List **published** restaurants; filters via `area`, `kashrut` (csv), `foodType` (csv), `q` |
+| `GET /api/restaurants/[id]` | Single restaurant with menu + reviews; 404 if unpublished |
 | `POST /api/orders` | Create an order for the logged-in user (401 otherwise); server re-prices items from the DB (never trusts client prices) and enforces the restaurant's minimum order |
 | `GET /api/orders` | The logged-in user's order history |
 | `GET /api/orders/[id]` | Single order, restricted to its owner (403 for anyone else); status is the real, restaurant-set value — the client polls to reflect updates the restaurant makes |
-| `POST /api/partner-applications` | Restaurant-owner signup submissions (lead capture; see below) |
-| `GET /api/dashboard/restaurants` | Restaurants owned by the logged-in user |
-| `GET/PATCH /api/dashboard/restaurants/[id]` | Full restaurant detail (incl. unavailable menu items) / update delivery + kashrut settings — 403 if you're not the owner |
+| `GET/POST /api/partner-applications` | The logged-in user's own applications / submit a new one |
+| `GET /api/dashboard/restaurants` | Restaurants owned by the logged-in user (published or not) |
+| `GET/PATCH /api/dashboard/restaurants/[id]` | Full restaurant detail (incl. unavailable menu items) / update profile, delivery, kashrut, and `published` — 403 if you're not the owner. Publishing is rejected server-side unless name, address, ≥1 food type, and ≥1 menu item are set |
 | `POST /api/dashboard/restaurants/[id]/menu-items` | Add a menu item |
 | `PATCH /api/dashboard/menu-items/[id]` | Edit a menu item, incl. toggling `available` (items are never hard-deleted, since past orders reference them) |
 | `GET /api/dashboard/orders?restaurantId=` | Orders for one owned restaurant |
 | `PATCH /api/dashboard/orders/[id]` | Advance an order's status one step forward (rejects skipping steps or going backward) |
+| `GET /api/admin/partner-applications` | All applications, any status — admin only |
+| `POST /api/admin/partner-applications/[id]/approve` | Creates the unpublished `Restaurant` owned by the applicant, marks the application approved |
+| `POST /api/admin/partner-applications/[id]/reject` | Marks the application rejected, optional `reviewNote` |
+| `GET /api/admin/restaurants` | All restaurants with owner phone + kashrut cert summary — admin only |
+| `POST /api/admin/restaurants/[id]/verify-kashrut` | Sets `certificateVerified`; the only way it can become `true` — owners can't self-verify |
 
 ## Israeli legal/compliance groundwork
 
@@ -160,23 +191,21 @@ sign-off.
 - **Auth hardening**: OTPs are stored in plain text in `OtpCode` (fine for a
   short-lived 6-digit code, but hash them for defense in depth), and there's
   no Apple/Google sign-in yet, per the original product plan.
-- **Onboarding new restaurants**: `/partner` submissions land in a
-  `PartnerApplication` table but don't automatically create a `Restaurant`
-  or grant dashboard access — there's no admin approval flow yet that turns
-  a lead into an owned restaurant. Today, restaurant ownership is only
-  assigned by the seed script (all 6 demo restaurants belong to one demo
-  owner phone, `0501112222`).
+- **Admin gating**: `/admin` is phone-allowlist gated (`ADMIN_PHONES`), not
+  a real role/permission system — fine for one or two trusted people
+  reviewing applications by hand, not for a larger internal team.
 - **Payments**: the checkout form is a visual mock — no card data is
   transmitted or stored. A production build needs a licensed Israeli
   payment processor (PCI DSS compliant).
 - **Delivery**: order status is set manually by the restaurant via the
   dashboard, not fed by real courier GPS/tracking data. A live courier
   integration would update status automatically instead of by button click.
-- **Kashrut verification**: certificate fields are editable by the
-  restaurant itself with no review workflow; a real launch needs a human
-  (or rabbinate-record integration) approval step before a business goes
-  live or changes its kashrut claim, plus expiry-date reminders. Certificate
-  photo upload also isn't wired into the dashboard yet (text fields only).
+- **Kashrut verification**: the admin's "verified" toggle at `/admin` is a
+  self-attested checkbox, not backed by an actual rabbinate-record lookup or
+  document review workflow — that integration doesn't exist yet, plus
+  there's no expiry-date reminder system. Certificate photo upload also
+  isn't wired into the dashboard yet (text fields only; new restaurants get
+  a placeholder certificate image at approval time).
 - **Images**: menu/restaurant photos are generated locally as inline SVG
   placeholders (`src/lib/placeholder.ts`) so the app has zero external
   image dependencies — swap in real photos per business at onboarding.

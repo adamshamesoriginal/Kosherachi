@@ -548,7 +548,13 @@ function SettingsTab({ restaurantId }: { restaurantId: string }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
+  const [name, setName] = useState("");
+  const [address, setAddress] = useState("");
+  const [cuisine, setCuisine] = useState("");
+  const [foodTypes, setFoodTypes] = useState<FoodType[]>([]);
+  const [published, setPublished] = useState(false);
   const [deliveryFee, setDeliveryFee] = useState("");
   const [minOrder, setMinOrder] = useState("");
   const [deliveryTimeMinLow, setDeliveryTimeMinLow] = useState("");
@@ -565,6 +571,11 @@ function SettingsTab({ restaurantId }: { restaurantId: string }) {
       .then((data: Restaurant | null) => {
         if (!data) return;
         setRestaurant(data);
+        setName(data.name);
+        setAddress(data.address);
+        setCuisine(data.cuisine.join(", "));
+        setFoodTypes(data.foodTypes);
+        setPublished(!!data.published);
         setDeliveryFee(String(data.deliveryFee));
         setMinOrder(String(data.minOrder));
         setDeliveryTimeMinLow(String(data.deliveryTimeMinutes[0]));
@@ -578,14 +589,25 @@ function SettingsTab({ restaurantId }: { restaurantId: string }) {
       .finally(() => setLoading(false));
   }, [restaurantId]);
 
+  const toggleFoodType = (id: FoodType) =>
+    setFoodTypes((prev) =>
+      prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id]
+    );
+
   const save = async () => {
     setSaving(true);
     setSaved(false);
+    setSaveError(null);
     try {
       const res = await fetch(`/api/dashboard/restaurants/${restaurantId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          name,
+          address,
+          cuisine: cuisine.split(",").map((c) => c.trim()).filter(Boolean),
+          foodTypes,
+          published,
           deliveryFee: Number(deliveryFee),
           minOrder: Number(minOrder),
           deliveryTimeMinLow: Number(deliveryTimeMinLow),
@@ -597,7 +619,12 @@ function SettingsTab({ restaurantId }: { restaurantId: string }) {
           certificateExpiryDate,
         }),
       });
-      if (res.ok) setSaved(true);
+      if (res.ok) {
+        setSaved(true);
+      } else {
+        const data = await res.json().catch(() => null);
+        setSaveError(data?.error ?? "השמירה נכשלה");
+      }
     } finally {
       setSaving(false);
     }
@@ -612,6 +639,73 @@ function SettingsTab({ restaurantId }: { restaurantId: string }) {
 
   return (
     <div className="px-4 py-4 flex flex-col gap-5">
+      <section className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <h2 className="font-bold text-stone-900 text-sm">פרסום</h2>
+          <span
+            className={`text-xs font-semibold px-2 py-1 rounded-full ${
+              published ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+            }`}
+          >
+            {published ? "מפורסם ללקוחות" : "טרם פורסם"}
+          </span>
+        </div>
+        <label className="flex items-center gap-2 text-sm text-stone-600">
+          <input
+            type="checkbox"
+            checked={published}
+            onChange={(e) => setPublished(e.target.checked)}
+            className="h-4 w-4"
+          />
+          פרסמו את העסק באפליקציה ללקוחות
+        </label>
+        {!published && (
+          <p className="text-[11px] text-stone-400">
+            כדי לפרסם צריך שם, כתובת, לפחות סוג תפריט אחד (בשרי/חלבי/פרווה)
+            ולפחות מנה אחת בתפריט.
+          </p>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h2 className="font-bold text-stone-900 text-sm">פרטי העסק</h2>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="שם העסק"
+          className="rounded-lg border border-stone-200 px-3 py-2 text-sm"
+        />
+        <input
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+          placeholder="כתובת"
+          className="rounded-lg border border-stone-200 px-3 py-2 text-sm"
+        />
+        <input
+          value={cuisine}
+          onChange={(e) => setCuisine(e.target.value)}
+          placeholder="סוגי מטבח, מופרדים בפסיקים (למשל: פיצה, איטלקי)"
+          className="rounded-lg border border-stone-200 px-3 py-2 text-sm"
+        />
+        <div className="flex flex-wrap gap-2">
+          {FOOD_TYPES.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => toggleFoodType(f.id)}
+              className={`flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium ${
+                foodTypes.includes(f.id)
+                  ? "border-emerald-600 bg-emerald-600 text-white"
+                  : "border-stone-200 bg-white text-stone-600"
+              }`}
+            >
+              <span>{f.emoji}</span>
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </section>
+
       <section className="flex flex-col gap-2">
         <h2 className="font-bold text-stone-900 text-sm">משלוח</h2>
         <div className="flex gap-2">
@@ -698,6 +792,7 @@ function SettingsTab({ restaurantId }: { restaurantId: string }) {
       </section>
 
       {saved && <p className="text-sm text-emerald-700 text-center">נשמר בהצלחה</p>}
+      {saveError && <p className="text-sm text-red-600 text-center">{saveError}</p>}
 
       <button
         onClick={save}

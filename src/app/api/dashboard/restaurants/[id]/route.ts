@@ -2,11 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireOwnedRestaurant, statusForError } from "@/lib/dashboard";
 import { serializeRestaurant } from "@/lib/serialize";
-import { KASHRUT_LEVELS } from "@/lib/types";
+import { FOOD_TYPES, KASHRUT_LEVELS } from "@/lib/types";
 
 const VALID_KASHRUT_LEVELS = new Set(KASHRUT_LEVELS.map((k) => k.id));
+const VALID_FOOD_TYPES = new Set(FOOD_TYPES.map((f) => f.id));
 
 interface UpdateRestaurantBody {
+  name?: string;
+  address?: string;
+  cuisine?: string[];
+  foodTypes?: string[];
   deliveryFee?: number;
   minOrder?: number;
   deliveryTimeMinLow?: number;
@@ -16,6 +21,7 @@ interface UpdateRestaurantBody {
   certifyingBody?: string;
   certificateNumber?: string;
   certificateExpiryDate?: string;
+  published?: boolean;
 }
 
 export async function GET(
@@ -57,6 +63,11 @@ export async function PATCH(
   if (body.kashrutLevel !== undefined && !VALID_KASHRUT_LEVELS.has(body.kashrutLevel as never)) {
     return NextResponse.json({ error: "Invalid kashrutLevel" }, { status: 400 });
   }
+  if (body.foodTypes !== undefined) {
+    if (!body.foodTypes.every((f) => VALID_FOOD_TYPES.has(f as never))) {
+      return NextResponse.json({ error: "Invalid foodTypes" }, { status: 400 });
+    }
+  }
   if (
     body.deliveryTimeMinLow !== undefined &&
     body.deliveryTimeMinHigh !== undefined &&
@@ -77,9 +88,32 @@ export async function PATCH(
     certificateExpiryDate = parsed;
   }
 
+  if (body.published === true) {
+    const current = await prisma.restaurant.findUniqueOrThrow({
+      where: { id },
+      include: { _count: { select: { menuItems: true } } },
+    });
+    const name = body.name ?? current.name;
+    const address = body.address ?? current.address;
+    const foodTypes = body.foodTypes ?? current.foodTypes.split(",").filter(Boolean);
+    if (!name.trim() || !address.trim() || foodTypes.length === 0 || current._count.menuItems === 0) {
+      return NextResponse.json(
+        {
+          error:
+            "כדי לפרסם צריך שם, כתובת, לפחות סוג תפריט אחד, ולפחות מנה אחת בתפריט",
+        },
+        { status: 400 }
+      );
+    }
+  }
+
   const restaurant = await prisma.restaurant.update({
     where: { id },
     data: {
+      name: body.name,
+      address: body.address,
+      cuisine: body.cuisine?.join(","),
+      foodTypes: body.foodTypes?.join(","),
       deliveryFee: body.deliveryFee,
       minOrder: body.minOrder,
       deliveryTimeMinLow: body.deliveryTimeMinLow,
@@ -89,6 +123,7 @@ export async function PATCH(
       certifyingBody: body.certifyingBody,
       certificateNumber: body.certificateNumber,
       certificateExpiryDate,
+      published: body.published,
     },
     include: { menuItems: true, reviews: true },
   });

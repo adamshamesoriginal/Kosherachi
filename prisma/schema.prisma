@@ -8,7 +8,8 @@ datasource db {
 }
 
 model Restaurant {
-  id                  String   @id
+  id                  String   @id @default(cuid())
+  published           Boolean  @default(true)
   name                String
   imageUrl            String
   logoUrl             String
@@ -35,9 +36,10 @@ model Restaurant {
   ownerId String?
   owner   User?   @relation(fields: [ownerId], references: [id])
 
-  menuItems MenuItem[]
-  reviews   Review[]
-  orders    Order[]
+  menuItems           MenuItem[]
+  reviews             Review[]
+  orders              Order[]
+  partnerApplications PartnerApplication[]
 
   @@index([ownerId])
 }
@@ -97,9 +99,10 @@ model User {
   name      String?
   createdAt DateTime  @default(now())
 
-  sessions         Session[]
-  orders           Order[]
-  ownedRestaurants Restaurant[]
+  sessions            Session[]
+  orders              Order[]
+  ownedRestaurants    Restaurant[]
+  partnerApplications PartnerApplication[]
 }
 
 model Session {
@@ -137,10 +140,19 @@ model OrderItem {
 }
 
 model PartnerApplication {
-  id           String   @id @default(cuid())
-  businessName String
-  businessId   String
-  phone        String
-  area         String
-  createdAt    DateTime @default(now())
+  id              String    @id @default(cuid())
+  applicantUserId String
+  applicant       User      @relation(fields: [applicantUserId], references: [id])
+  businessName    String
+  businessId      String
+  area            String
+  status          String    @default("pending") // pending | approved | rejected
+  reviewNote      String?
+  restaurantId    String?
+  restaurant      Restaurant? @relation(fields: [restaurantId], references: [id])
+  createdAt       DateTime  @default(now())
+  reviewedAt      DateTime?
+
+  @@index([applicantUserId])
+  @@index([status])
 }

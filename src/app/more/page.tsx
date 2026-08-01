@@ -19,9 +19,13 @@ export default function MorePage() {
   const router = useRouter();
   const { user, authLoading, logout } = useApp();
 
-  const links = user && user.ownedRestaurants.length > 0
-    ? [{ href: "/dashboard", label: "לוח בקרה לבית העסק שלי", icon: "📊" }, ...LINKS]
-    : LINKS;
+  let links = LINKS;
+  if (user?.isAdmin) {
+    links = [{ href: "/admin", label: "ניהול — בקשות הצטרפות וכשרות", icon: "🛡️" }, ...links];
+  }
+  if (user && user.ownedRestaurants.length > 0) {
+    links = [{ href: "/dashboard", label: "לוח בקרה לבית העסק שלי", icon: "📊" }, ...links];
+  }
 
   return (
     <main className="flex-1 flex flex-col px-4 py-6 gap-4">

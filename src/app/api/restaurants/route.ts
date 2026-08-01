@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   const q = searchParams.get("q")?.trim().toLowerCase() ?? "";
 
   const restaurants = await prisma.restaurant.findMany({
-    where: area ? { area } : undefined,
+    where: { published: true, ...(area ? { area } : {}) },
     include: { menuItems: { where: { available: true } }, reviews: true },
     orderBy: { rating: "desc" },
   });

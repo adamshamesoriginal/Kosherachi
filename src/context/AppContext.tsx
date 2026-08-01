@@ -22,6 +22,7 @@ export interface AuthUser {
   id: string;
   phone: string;
   ownedRestaurants: { id: string; name: string }[];
+  isAdmin: boolean;
 }
 
 const DEFAULT_PREFS: Preferences = {

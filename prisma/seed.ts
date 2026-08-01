@@ -39,6 +39,7 @@ async function main() {
         certificateExpiryDate: new Date(r.kashrut.expiryDate),
         certificateImageUrl: r.kashrut.certificateImageUrl,
         certificateVerified: r.kashrut.verified,
+        published: true,
         ownerId: demoOwner.id,
         menuItems: {
           create: r.menu.map((m) => ({
@@ -66,6 +67,9 @@ async function main() {
   console.log(`Seeded ${RESTAURANTS.length} restaurants.`);
   console.log(
     `Demo restaurant-owner login: ${DEMO_OWNER_PHONE} (owns all seeded restaurants) — log in at /auth, then visit /dashboard.`
+  );
+  console.log(
+    "Demo admin login: set via ADMIN_PHONES env var, or use the default 0501110000 (see src/lib/admin.ts) — log in at /auth, then visit /admin."
   );
 }
 
