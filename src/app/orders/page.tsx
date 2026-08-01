@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useApp } from "@/context/AppContext";
+import { Order } from "@/lib/types";
 
 const STATUS_LABEL: Record<string, string> = {
   placed: "התקבלה",
@@ -12,13 +14,23 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default function OrdersPage() {
-  const { orders } = useApp();
+  const { customerId } = useApp();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!customerId) return;
+    fetch(`/api/orders?customerId=${encodeURIComponent(customerId)}`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: Order[]) => setOrders(data))
+      .finally(() => setLoading(false));
+  }, [customerId]);
 
   return (
     <main className="flex-1 flex flex-col px-4 py-6 gap-4">
       <h1 className="text-xl font-extrabold">ההזמנות שלי</h1>
 
-      {orders.length === 0 && (
+      {!loading && orders.length === 0 && (
         <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center text-stone-400 py-16">
           <span className="text-3xl">🧾</span>
           <p className="font-medium">עדיין אין הזמנות</p>

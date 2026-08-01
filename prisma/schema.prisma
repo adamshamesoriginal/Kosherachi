@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Restaurant {
+  id                  String   @id
+  name                String
+  imageUrl            String
+  logoUrl             String
+  cuisine             String // comma-separated
+  area                String
+  address             String
+  foodTypes           String // comma-separated FoodType values
+  rating              Float
+  reviewCount         Int
+  deliveryTimeMinLow  Int
+  deliveryTimeMinHigh Int
+  deliveryFee         Float
+  minOrder            Float
+  selfDelivery        Boolean
+
+  kashrutLevel           String
+  certifyingBody         String
+  certificateNumber      String
+  certificateIssuedDate  DateTime
+  certificateExpiryDate  DateTime
+  certificateImageUrl    String
+  certificateVerified    Boolean
+
+  menuItems MenuItem[]
+  reviews   Review[]
+  orders    Order[]
+}
+
+model MenuItem {
+  id           String     @id @default(cuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  name         String
+  description  String
+  price        Float
+  imageUrl     String
+  foodType     String
+  category     String
+  popular      Boolean    @default(false)
+
+  orderItems OrderItem[]
+}
+
+model Review {
+  id           String     @id @default(cuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  userName     String
+  rating       Int
+  comment      String
+  date         DateTime
+}
+
+model Order {
+  id                String   @id
+  customerId        String
+  restaurantId      String
+  restaurant        Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantName    String
+  subtotal          Float
+  deliveryFee       Float
+  serviceFee        Float
+  vat               Float
+  total             Float
+  address           String
+  phone             String
+  pickupOrDelivery  String
+  createdAt         DateTime @default(now())
+
+  items OrderItem[]
+
+  @@index([customerId])
+}
+
+model OrderItem {
+  id         String   @id @default(cuid())
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  name       String
+  price      Float
+  quantity   Int
+}
+
+model PartnerApplication {
+  id           String   @id @default(cuid())
+  businessName String
+  businessId   String
+  phone        String
+  area         String
+  createdAt    DateTime @default(now())
+}

@@ -2,33 +2,43 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useApp } from "@/context/AppContext";
-import { getRestaurantById } from "@/lib/data";
-import { Order } from "@/lib/types";
-
-const VAT_RATE = 0.18; // Israel standard VAT rate; menu prices already include VAT
-const SERVICE_FEE = 2.9;
+import { useRestaurant } from "@/hooks/useRestaurant";
+import { SERVICE_FEE, VAT_RATE } from "@/lib/pricing";
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { cart, cartRestaurantId, cartTotal, addOrder, clearCart } = useApp();
-  const restaurant = cartRestaurantId ? getRestaurantById(cartRestaurantId) : null;
+  const { cart, cartRestaurantId, cartTotal, customerId, clearCart } = useApp();
+  const { restaurant, loading: restaurantLoading } = useRestaurant(cartRestaurantId);
 
   const [mode, setMode] = useState<"delivery" | "pickup">("delivery");
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
   const [cardNumber, setCardNumber] = useState("");
   const [placing, setPlacing] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  // Clearing the cart after a successful order also makes cart.length hit 0,
+  // which would otherwise trigger the empty-cart redirect below and race
+  // with the navigation to the order page.
+  const orderPlacedRef = useRef(false);
 
   useEffect(() => {
-    if (cart.length === 0 || !restaurant) {
+    if (cart.length === 0 && !orderPlacedRef.current) {
       router.replace("/cart");
     }
-  }, [cart.length, restaurant, router]);
+  }, [cart.length, router]);
 
-  if (cart.length === 0 || !restaurant) {
+  if (cart.length === 0) {
     return null;
+  }
+
+  if (restaurantLoading || !restaurant) {
+    return (
+      <main className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center text-stone-400">
+        <p>טוען...</p>
+      </main>
+    );
   }
 
   const deliveryFee = mode === "delivery" ? restaurant.deliveryFee : 0;
@@ -36,33 +46,40 @@ export default function CheckoutPage() {
   const vatIncluded = total - total / (1 + VAT_RATE);
 
   const canSubmit =
+    !!customerId &&
     (mode === "pickup" || address.trim().length > 3) &&
     phone.trim().length >= 9 &&
     cardNumber.replace(/\s/g, "").length >= 12;
 
-  const placeOrder = () => {
-    if (!canSubmit) return;
+  const placeOrder = async () => {
+    if (!canSubmit || placing) return;
     setPlacing(true);
-    // eslint-disable-next-line react-hooks/purity -- id generated inside a user-triggered click handler, not during render
-    const orderId = `KG-${Date.now().toString().slice(-8)}`;
-    const order: Order = {
-      id: orderId,
-      restaurantId: restaurant.id,
-      restaurantName: restaurant.name,
-      items: cart,
-      subtotal: cartTotal,
-      deliveryFee,
-      serviceFee: SERVICE_FEE,
-      vat: vatIncluded,
-      total,
-      address: mode === "delivery" ? address : `איסוף עצמי: ${restaurant.address}`,
-      status: "placed",
-      createdAt: new Date().toISOString(),
-      pickupOrDelivery: mode,
-    };
-    addOrder(order);
-    clearCart();
-    setTimeout(() => router.push(`/order/${order.id}`), 400);
+    setSubmitError(null);
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerId,
+          restaurantId: restaurant.id,
+          items: cart.map((c) => ({ menuItemId: c.item.id, quantity: c.quantity })),
+          address,
+          phone,
+          pickupOrDelivery: mode,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error ?? "ההזמנה נכשלה, נסו שוב");
+      }
+      const order = await res.json();
+      orderPlacedRef.current = true;
+      clearCart();
+      router.push(`/order/${order.id}`);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "ההזמנה נכשלה, נסו שוב");
+      setPlacing(false);
+    }
   };
 
   return (
@@ -160,6 +177,10 @@ export default function CheckoutPage() {
             <span>₪{total.toFixed(2)}</span>
           </div>
         </section>
+
+        {submitError && (
+          <p className="text-sm text-red-600 text-center">{submitError}</p>
+        )}
 
         <p className="text-[11px] text-stone-400 leading-relaxed">
           בביצוע ההזמנה אתם מאשרים את{" "}

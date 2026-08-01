@@ -5,12 +5,38 @@ import Link from "next/link";
 
 export default function PartnerPage() {
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [businessId, setBusinessId] = useState("");
   const [phone, setPhone] = useState("");
   const [area, setArea] = useState("");
 
   const canSubmit = name.trim() && businessId.trim() && phone.trim() && area.trim();
+
+  const submit = async () => {
+    if (!canSubmit || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/partner-applications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          businessName: name,
+          businessId,
+          phone,
+          area,
+        }),
+      });
+      if (!res.ok) throw new Error("השליחה נכשלה, נסו שוב");
+      setSubmitted(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "השליחה נכשלה, נסו שוב");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   if (submitted) {
     return (
@@ -56,7 +82,7 @@ export default function PartnerPage() {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (canSubmit) setSubmitted(true);
+          submit();
         }}
         className="flex flex-col gap-3"
       >
@@ -89,12 +115,13 @@ export default function PartnerPage() {
           📎 בשלב ההצטרפות תתבקשו להעלות צילום תעודת כשרות בתוקף — נדרש עבור
           כל בית עסק המוצג באפליקציה.
         </div>
+        {error && <p className="text-sm text-red-600 text-center">{error}</p>}
         <button
           type="submit"
-          disabled={!canSubmit}
+          disabled={!canSubmit || submitting}
           className="rounded-2xl bg-emerald-700 py-3.5 font-bold text-white disabled:opacity-40"
         >
-          שליחת בקשת הצטרפות
+          {submitting ? "שולח..." : "שליחת בקשת הצטרפות"}
         </button>
         <p className="text-[11px] text-stone-400 text-center">
           בשליחת הטופס אתם מאשרים את{" "}

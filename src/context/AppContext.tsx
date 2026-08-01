@@ -8,7 +8,7 @@ import {
   useState,
   ReactNode,
 } from "react";
-import { CartItem, FoodType, KashrutLevel, MenuItem, Order, Restaurant } from "@/lib/types";
+import { CartItem, FoodType, KashrutLevel, MenuItem, Restaurant } from "@/lib/types";
 
 interface Preferences {
   kashrutLevels: KashrutLevel[];
@@ -29,6 +29,8 @@ interface AppContextValue {
   setPrefs: (p: Partial<Preferences>) => void;
   completeOnboarding: (p: Omit<Preferences, "onboarded">) => void;
 
+  customerId: string;
+
   cart: CartItem[];
   cartRestaurantId: string | null;
   addToCart: (restaurant: Restaurant, item: MenuItem) => void;
@@ -37,20 +39,21 @@ interface AppContextValue {
   clearCart: () => void;
   cartTotal: number;
   cartCount: number;
-
-  orders: Order[];
-  addOrder: (order: Order) => void;
-  updateOrderStatus: (orderId: string, status: Order["status"]) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
 
 const STORAGE_KEY = "koshergo_state_v1";
+const CUSTOMER_ID_KEY = "koshergo_customer_id";
+
+function generateCustomerId(): string {
+  return `cust_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+}
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [prefs, setPrefsState] = useState<Preferences>(DEFAULT_PREFS);
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [customerId, setCustomerId] = useState("");
   const [hydrated, setHydrated] = useState(false);
 
   // One-time hydration from localStorage on mount; setState-in-effect is
@@ -63,8 +66,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         if (parsed.prefs) setPrefsState(parsed.prefs);
         if (parsed.cart) setCart(parsed.cart);
-        if (parsed.orders) setOrders(parsed.orders);
       }
+      let id = localStorage.getItem(CUSTOMER_ID_KEY);
+      if (!id) {
+        id = generateCustomerId();
+        localStorage.setItem(CUSTOMER_ID_KEY, id);
+      }
+      setCustomerId(id);
     } catch {
       // ignore corrupted local storage
     }
@@ -73,8 +81,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!hydrated) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ prefs, cart, orders }));
-  }, [prefs, cart, orders, hydrated]);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ prefs, cart }));
+  }, [prefs, cart, hydrated]);
 
   const setPrefs = (p: Partial<Preferences>) =>
     setPrefsState((prev) => ({ ...prev, ...p }));
@@ -120,19 +128,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [cart]
   );
 
-  const addOrder = (order: Order) => setOrders((prev) => [order, ...prev]);
-
-  const updateOrderStatus = (orderId: string, status: Order["status"]) =>
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status } : o))
-    );
-
   return (
     <AppContext.Provider
       value={{
         prefs,
         setPrefs,
         completeOnboarding,
+        customerId,
         cart,
         cartRestaurantId,
         addToCart,
@@ -141,9 +143,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         clearCart,
         cartTotal,
         cartCount,
-        orders,
-        addOrder,
-        updateOrderStatus,
       }}
     >
       {children}

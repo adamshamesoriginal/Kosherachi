@@ -1,21 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "@/context/AppContext";
-import { RESTAURANTS } from "@/lib/data";
 import { RestaurantCard } from "@/components/RestaurantCard";
-import { FOOD_TYPES, FoodType, KASHRUT_LEVELS, KashrutLevel } from "@/lib/types";
+import { FOOD_TYPES, FoodType, KASHRUT_LEVELS, KashrutLevel, Restaurant } from "@/lib/types";
 
 export default function HomePage() {
   const { prefs } = useApp();
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [activeKashrut, setActiveKashrut] = useState<KashrutLevel[]>(
     prefs.kashrutLevels
   );
   const [activeFoodTypes, setActiveFoodTypes] = useState<FoodType[]>(
     prefs.foodTypes
   );
+  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   const toggleKashrut = (id: KashrutLevel) =>
     setActiveKashrut((prev) =>
@@ -26,26 +29,35 @@ export default function HomePage() {
       prev.includes(id) ? prev.filter((k) => k !== id) : [...prev, id]
     );
 
-  const filtered = useMemo(() => {
-    return RESTAURANTS.filter((r) => {
-      if (activeKashrut.length > 0 && !activeKashrut.includes(r.kashrut.level))
-        return false;
-      if (
-        activeFoodTypes.length > 0 &&
-        !r.foodTypes.some((ft) => activeFoodTypes.includes(ft))
-      )
-        return false;
-      if (prefs.area && r.area !== prefs.area) return false;
-      if (query.trim()) {
-        const q = query.trim().toLowerCase();
-        const haystack = `${r.name} ${r.cuisine.join(" ")} ${r.menu
-          .map((m) => m.name)
-          .join(" ")}`.toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
-      return true;
-    });
-  }, [activeKashrut, activeFoodTypes, prefs.area, query]);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (prefs.area) params.set("area", prefs.area);
+    if (activeKashrut.length) params.set("kashrut", activeKashrut.join(","));
+    if (activeFoodTypes.length) params.set("foodType", activeFoodTypes.join(","));
+    if (debouncedQuery.trim()) params.set("q", debouncedQuery.trim());
+
+    const controller = new AbortController();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- kicking off a fetch tied to filter changes
+    setLoading(true);
+    setError(false);
+    fetch(`/api/restaurants?${params.toString()}`, { signal: controller.signal })
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to load restaurants");
+        return res.json();
+      })
+      .then((data: Restaurant[]) => setRestaurants(data))
+      .catch((err) => {
+        if (err.name !== "AbortError") setError(true);
+      })
+      .finally(() => setLoading(false));
+
+    return () => controller.abort();
+  }, [prefs.area, activeKashrut, activeFoodTypes, debouncedQuery]);
 
   return (
     <main className="flex-1 flex flex-col">
@@ -107,18 +119,29 @@ export default function HomePage() {
       </header>
 
       <div className="px-4 py-4 flex flex-col gap-3">
-        <p className="text-sm text-stone-500">
-          {filtered.length} מסעדות מתאימות להעדפות שלכם
-        </p>
-        {filtered.length === 0 && (
+        {error && (
+          <div className="text-center py-16 flex flex-col items-center gap-2 text-red-500">
+            <span className="text-3xl">⚠️</span>
+            <p className="font-medium">שגיאה בטעינת המסעדות</p>
+          </div>
+        )}
+
+        {!error && (
+          <p className="text-sm text-stone-500">
+            {loading ? "טוען..." : `${restaurants.length} מסעדות מתאימות להעדפות שלכם`}
+          </p>
+        )}
+
+        {!loading && !error && restaurants.length === 0 && (
           <div className="text-center py-16 flex flex-col items-center gap-2 text-stone-400">
             <span className="text-3xl">🍽️</span>
             <p className="font-medium">לא נמצאו מסעדות מתאימות</p>
             <p className="text-sm">נסו להרחיב את הסינון או לבחור אזור אחר</p>
           </div>
         )}
+
         <div className="grid grid-cols-1 gap-4">
-          {filtered.map((r) => (
+          {restaurants.map((r) => (
             <RestaurantCard key={r.id} restaurant={r} />
           ))}
         </div>

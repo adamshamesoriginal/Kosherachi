@@ -3,14 +3,14 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useApp } from "@/context/AppContext";
-import { getRestaurantById } from "@/lib/data";
+import { useRestaurant } from "@/hooks/useRestaurant";
 
 export default function CartPage() {
   const { cart, cartRestaurantId, updateQuantity, removeFromCart, cartTotal } =
     useApp();
-  const restaurant = cartRestaurantId ? getRestaurantById(cartRestaurantId) : null;
+  const { restaurant, loading } = useRestaurant(cartRestaurantId);
 
-  if (cart.length === 0 || !restaurant) {
+  if (cart.length === 0) {
     return (
       <main className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center">
         <span className="text-4xl">🛒</span>
@@ -21,6 +21,14 @@ export default function CartPage() {
         >
           לתפריט המסעדות
         </Link>
+      </main>
+    );
+  }
+
+  if (loading || !restaurant) {
+    return (
+      <main className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center text-stone-400">
+        <p>טוען...</p>
       </main>
     );
   }

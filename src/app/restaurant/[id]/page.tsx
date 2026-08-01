@@ -4,20 +4,20 @@ import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { getRestaurantById } from "@/lib/data";
 import { KashrutBadge } from "@/components/KashrutBadge";
 import { FoodTypeBadge } from "@/components/FoodTypeBadge";
 import { KashrutCertificateCard } from "@/components/KashrutCertificateCard";
 import { useApp } from "@/context/AppContext";
+import { useRestaurant } from "@/hooks/useRestaurant";
 import { MenuItem } from "@/lib/types";
 
 export default function RestaurantPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const restaurant = getRestaurantById(params.id);
   const { addToCart, cart, cartRestaurantId, cartCount, cartTotal } = useApp();
   const [tab, setTab] = useState<"menu" | "kashrut" | "reviews">("menu");
   const [addedItemId, setAddedItemId] = useState<string | null>(null);
+  const { restaurant, loading, notFound } = useRestaurant(params.id);
 
   const categories = useMemo(() => {
     if (!restaurant) return [];
@@ -25,7 +25,15 @@ export default function RestaurantPage() {
     return set;
   }, [restaurant]);
 
-  if (!restaurant) {
+  if (loading) {
+    return (
+      <main className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center text-stone-400">
+        <p>טוען...</p>
+      </main>
+    );
+  }
+
+  if (notFound || !restaurant) {
     return (
       <main className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center">
         <p className="text-lg font-semibold">המסעדה לא נמצאה</p>

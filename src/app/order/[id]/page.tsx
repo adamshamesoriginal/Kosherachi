@@ -2,9 +2,8 @@
 
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { useEffect } from "react";
-import { useApp } from "@/context/AppContext";
-import { OrderStatus } from "@/lib/types";
+import { useEffect, useState } from "react";
+import { Order, OrderStatus } from "@/lib/types";
 
 const STATUS_FLOW: { id: OrderStatus; label: string; icon: string }[] = [
   { id: "placed", label: "ההזמנה התקבלה", icon: "🧾" },
@@ -16,20 +15,52 @@ const STATUS_FLOW: { id: OrderStatus; label: string; icon: string }[] = [
 
 export default function OrderTrackingPage() {
   const params = useParams<{ id: string }>();
-  const { orders, updateOrderStatus } = useApp();
-  const order = orders.find((o) => o.id === params.id);
+  const [order, setOrder] = useState<Order | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
-    if (!order || order.status === "delivered") return;
-    const currentIndex = STATUS_FLOW.findIndex((s) => s.id === order.status);
-    if (currentIndex === -1 || currentIndex >= STATUS_FLOW.length - 1) return;
-    const timer = setTimeout(() => {
-      updateOrderStatus(order.id, STATUS_FLOW[currentIndex + 1].id);
-    }, 8000);
-    return () => clearTimeout(timer);
-  }, [order, updateOrderStatus]);
+    let cancelled = false;
 
-  if (!order) {
+    const fetchOrder = () => {
+      fetch(`/api/orders/${params.id}`)
+        .then((res) => {
+          if (res.status === 404) {
+            if (!cancelled) setNotFound(true);
+            return null;
+          }
+          if (!res.ok) throw new Error("Failed to load order");
+          return res.json();
+        })
+        .then((data: Order | null) => {
+          if (data && !cancelled) setOrder(data);
+        })
+        .catch(() => {
+          if (!cancelled) setNotFound(true);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    };
+
+    fetchOrder();
+    // Status is computed server-side from elapsed time, so we poll to reflect it live.
+    const interval = setInterval(fetchOrder, 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [params.id]);
+
+  if (loading) {
+    return (
+      <main className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center text-stone-400">
+        <p>טוען...</p>
+      </main>
+    );
+  }
+
+  if (notFound || !order) {
     return (
       <main className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center">
         <p className="font-semibold text-stone-700">ההזמנה לא נמצאה</p>

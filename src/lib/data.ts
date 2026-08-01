@@ -246,10 +246,6 @@ export const RESTAURANTS: Restaurant[] = [
   },
 ];
 
-export function getRestaurantById(id: string): Restaurant | undefined {
-  return RESTAURANTS.find((r) => r.id === id);
-}
-
 export function isCertificateExpiringSoon(expiryDate: string, withinDays = 30): boolean {
   const diff = new Date(expiryDate).getTime() - Date.now();
   return diff > 0 && diff < withinDays * 24 * 60 * 60 * 1000;
