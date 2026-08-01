@@ -19,6 +19,10 @@ export default function MorePage() {
   const router = useRouter();
   const { user, authLoading, logout } = useApp();
 
+  const links = user && user.ownedRestaurants.length > 0
+    ? [{ href: "/dashboard", label: "לוח בקרה לבית העסק שלי", icon: "📊" }, ...LINKS]
+    : LINKS;
+
   return (
     <main className="flex-1 flex flex-col px-4 py-6 gap-4">
       <h1 className="text-xl font-extrabold">עוד</h1>
@@ -56,12 +60,12 @@ export default function MorePage() {
       </div>
 
       <div className="flex flex-col rounded-2xl border border-stone-200 bg-white overflow-hidden">
-        {LINKS.map((l, i) => (
+        {links.map((l, i) => (
           <Link
             key={l.href}
             href={l.href}
             className={`flex items-center gap-3 px-4 py-3.5 text-sm font-medium text-stone-700 ${
-              i !== LINKS.length - 1 ? "border-b border-stone-100" : ""
+              i !== links.length - 1 ? "border-b border-stone-100" : ""
             }`}
           >
             <span className="text-lg">{l.icon}</span>

@@ -61,6 +61,12 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    if (!menuItem.available) {
+      return NextResponse.json(
+        { error: `${menuItem.name} is currently unavailable` },
+        { status: 400 }
+      );
+    }
     orderItemsInput.push({ menuItem, quantity: Math.max(1, Math.floor(requested.quantity)) });
   }
 

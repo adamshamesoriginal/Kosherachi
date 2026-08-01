@@ -34,6 +34,7 @@ export interface MenuItem {
   foodType: FoodType;
   category: string;
   popular?: boolean;
+  available?: boolean;
 }
 
 export interface Review {

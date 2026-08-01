@@ -8,8 +8,9 @@ each with its kashrut certificate (certifying body, certificate number,
 expiry date, and a photo of the teudat kashrut) displayed on the spot.
 
 An onboarding flow, a filtered restaurant list, a restaurant/menu page,
-cart, checkout, and order tracking, all backed by a real database via API
-routes — no payments or live restaurant integrations yet.
+cart, checkout, and order tracking, plus a restaurant-owner dashboard for
+managing orders and menus — all backed by a real database via API routes.
+No payments or live courier integrations yet.
 
 ## Stack
 
@@ -47,7 +48,10 @@ npm run dev
 Open http://localhost:3000.
 
 The SQLite file lives at `prisma/dev.db` and is gitignored — every clone
-needs `db:push` + `db:seed` once before the app has data.
+needs `db:push` + `db:seed` once before the app has data. Seeding also
+prints a demo restaurant-owner login (`0501112222`, owns all 6 seeded
+restaurants) — log in with it at `/auth` and visit `/dashboard` to manage
+menus and orders.
 
 ## App flow
 
@@ -56,10 +60,22 @@ needs `db:push` + `db:seed` once before the app has data.
 restaurant list + search) → `/restaurant/[id]` (menu, kashrut certificate
 tab, reviews) → `/cart` → `/checkout` (requires login; redirects to
 `/auth?next=/checkout` otherwise) → `/order/[id]` (live status tracker,
-polling the API). `/partner` is the restaurant-owner signup form. `/more`
-shows the logged-in phone number + logout, and links to the legal pages
-below. Browsing restaurants doesn't require login — only placing an order
-and viewing order history do.
+polling the API). `/partner` is the restaurant-owner signup form (lead
+capture only — see below). `/more` shows the logged-in phone number +
+logout, and links to the legal pages below and, if the account owns a
+restaurant, to `/dashboard`. Browsing restaurants doesn't require login —
+only placing an order and viewing order history do.
+
+Restaurant owners get `/dashboard` (redirects straight into the one owned
+restaurant, or lists them if there's more than one) → `/dashboard/[id]`
+with three tabs: **הזמנות** (incoming orders, each with a button to advance
+it to the next status — placed → confirmed → preparing → out for delivery
+→ delivered; this is what actually drives the customer's tracking page,
+there's no more time-based auto-simulation), **תפריט** (add menu items,
+edit existing ones, toggle an item unavailable so customers stop seeing it
+without deleting its order history), and **פרטי העסק** (delivery fee,
+minimum order, delivery time window, self-delivery toggle, and the kashrut
+certificate's level/body/number/expiry).
 
 ## API routes
 
@@ -73,8 +89,14 @@ and viewing order history do.
 | `GET /api/restaurants/[id]` | Single restaurant with menu + reviews |
 | `POST /api/orders` | Create an order for the logged-in user (401 otherwise); server re-prices items from the DB (never trusts client prices) and enforces the restaurant's minimum order |
 | `GET /api/orders` | The logged-in user's order history |
-| `GET /api/orders/[id]` | Single order, restricted to its owner (403 for anyone else); status is computed server-side from elapsed time since `createdAt`, not stored, so the client just polls |
-| `POST /api/partner-applications` | Restaurant-owner signup submissions |
+| `GET /api/orders/[id]` | Single order, restricted to its owner (403 for anyone else); status is the real, restaurant-set value — the client polls to reflect updates the restaurant makes |
+| `POST /api/partner-applications` | Restaurant-owner signup submissions (lead capture; see below) |
+| `GET /api/dashboard/restaurants` | Restaurants owned by the logged-in user |
+| `GET/PATCH /api/dashboard/restaurants/[id]` | Full restaurant detail (incl. unavailable menu items) / update delivery + kashrut settings — 403 if you're not the owner |
+| `POST /api/dashboard/restaurants/[id]/menu-items` | Add a menu item |
+| `PATCH /api/dashboard/menu-items/[id]` | Edit a menu item, incl. toggling `available` (items are never hard-deleted, since past orders reference them) |
+| `GET /api/dashboard/orders?restaurantId=` | Orders for one owned restaurant |
+| `PATCH /api/dashboard/orders/[id]` | Advance an order's status one step forward (rejects skipping steps or going backward) |
 
 ## Israeli legal/compliance groundwork
 
@@ -115,17 +137,23 @@ sign-off.
 - **Auth hardening**: OTPs are stored in plain text in `OtpCode` (fine for a
   short-lived 6-digit code, but hash them for defense in depth), and there's
   no Apple/Google sign-in yet, per the original product plan.
-- **Restaurant management**: menus/hours/kashrut certificates are edited via
-  the seed script only. A real version needs a restaurant-facing dashboard.
+- **Onboarding new restaurants**: `/partner` submissions land in a
+  `PartnerApplication` table but don't automatically create a `Restaurant`
+  or grant dashboard access — there's no admin approval flow yet that turns
+  a lead into an owned restaurant. Today, restaurant ownership is only
+  assigned by the seed script (all 6 demo restaurants belong to one demo
+  owner phone, `0501112222`).
 - **Payments**: the checkout form is a visual mock — no card data is
   transmitted or stored. A production build needs a licensed Israeli
   payment processor (PCI DSS compliant).
-- **Delivery**: order status is a deterministic function of elapsed time for
-  demo purposes, not real courier data. Real tracking needs either
-  restaurant self-delivery reporting or a courier/delivery API integration.
-- **Kashrut verification**: certificates are stored as data with no review
-  workflow; a real launch needs a human (or rabbinate-record integration)
-  approval step before a business goes live, plus expiry-date reminders.
+- **Delivery**: order status is set manually by the restaurant via the
+  dashboard, not fed by real courier GPS/tracking data. A live courier
+  integration would update status automatically instead of by button click.
+- **Kashrut verification**: certificate fields are editable by the
+  restaurant itself with no review workflow; a real launch needs a human
+  (or rabbinate-record integration) approval step before a business goes
+  live or changes its kashrut claim, plus expiry-date reminders. Certificate
+  photo upload also isn't wired into the dashboard yet (text fields only).
 - **Images**: menu/restaurant photos are generated locally as inline SVG
   placeholders (`src/lib/placeholder.ts`) so the app has zero external
   image dependencies — swap in real photos per business at onboarding.

@@ -21,6 +21,7 @@ interface Preferences {
 export interface AuthUser {
   id: string;
   phone: string;
+  ownedRestaurants: { id: string; name: string }[];
 }
 
 const DEFAULT_PREFS: Preferences = {

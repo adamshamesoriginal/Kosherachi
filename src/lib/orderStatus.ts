@@ -8,14 +8,13 @@ export const STATUS_FLOW: OrderStatus[] = [
   "delivered",
 ];
 
-const STEP_SECONDS = 8;
+export function isForwardTransition(current: OrderStatus, next: OrderStatus): boolean {
+  const currentIndex = STATUS_FLOW.indexOf(current);
+  const nextIndex = STATUS_FLOW.indexOf(next);
+  return nextIndex > currentIndex;
+}
 
-/** Deterministic, server-computed order status based on elapsed time since creation. */
-export function computeOrderStatus(createdAt: Date): OrderStatus {
-  const elapsedSeconds = (Date.now() - createdAt.getTime()) / 1000;
-  const index = Math.min(
-    STATUS_FLOW.length - 1,
-    Math.floor(elapsedSeconds / STEP_SECONDS)
-  );
-  return STATUS_FLOW[Math.max(0, index)];
+export function nextStatus(current: OrderStatus): OrderStatus | null {
+  const currentIndex = STATUS_FLOW.indexOf(current);
+  return currentIndex < STATUS_FLOW.length - 1 ? STATUS_FLOW[currentIndex + 1] : null;
 }

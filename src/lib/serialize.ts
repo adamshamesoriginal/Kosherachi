@@ -10,10 +10,10 @@ import {
   KashrutLevel,
   MenuItem,
   Order,
+  OrderStatus,
   Restaurant,
   Review,
 } from "./types";
-import { computeOrderStatus } from "./orderStatus";
 
 type RestaurantWithRelations = DbRestaurant & {
   menuItems: DbMenuItem[];
@@ -30,6 +30,7 @@ export function serializeMenuItem(m: DbMenuItem): MenuItem {
     foodType: m.foodType as FoodType,
     category: m.category,
     popular: m.popular,
+    available: m.available,
   };
 }
 
@@ -101,7 +102,7 @@ export function serializeOrder(o: OrderWithItems): Order {
     vat: o.vat,
     total: o.total,
     address: o.address,
-    status: computeOrderStatus(o.createdAt),
+    status: o.status as OrderStatus,
     createdAt: o.createdAt.toISOString(),
     pickupOrDelivery: o.pickupOrDelivery as "delivery" | "pickup",
   };

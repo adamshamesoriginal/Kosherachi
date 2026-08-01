@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
 
   const restaurants = await prisma.restaurant.findMany({
     where: area ? { area } : undefined,
-    include: { menuItems: true, reviews: true },
+    include: { menuItems: { where: { available: true } }, reviews: true },
     orderBy: { rating: "desc" },
   });
 

@@ -32,9 +32,14 @@ model Restaurant {
   certificateImageUrl    String
   certificateVerified    Boolean
 
+  ownerId String?
+  owner   User?   @relation(fields: [ownerId], references: [id])
+
   menuItems MenuItem[]
   reviews   Review[]
   orders    Order[]
+
+  @@index([ownerId])
 }
 
 model MenuItem {
@@ -48,6 +53,7 @@ model MenuItem {
   foodType     String
   category     String
   popular      Boolean    @default(false)
+  available    Boolean    @default(true)
 
   orderItems OrderItem[]
 }
@@ -77,6 +83,7 @@ model Order {
   address           String
   phone             String
   pickupOrDelivery  String
+  status            String   @default("placed")
   createdAt         DateTime @default(now())
 
   items OrderItem[]
@@ -90,8 +97,9 @@ model User {
   name      String?
   createdAt DateTime  @default(now())
 
-  sessions Session[]
-  orders   Order[]
+  sessions         Session[]
+  orders           Order[]
+  ownedRestaurants Restaurant[]
 }
 
 model Session {

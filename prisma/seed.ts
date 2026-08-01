@@ -3,7 +3,15 @@ import { RESTAURANTS } from "../src/lib/data";
 
 const prisma = new PrismaClient();
 
+const DEMO_OWNER_PHONE = "0501112222";
+
 async function main() {
+  const demoOwner = await prisma.user.upsert({
+    where: { phone: DEMO_OWNER_PHONE },
+    update: {},
+    create: { phone: DEMO_OWNER_PHONE, name: "בעל מסעדה (הדגמה)" },
+  });
+
   for (const r of RESTAURANTS) {
     await prisma.restaurant.upsert({
       where: { id: r.id },
@@ -31,6 +39,7 @@ async function main() {
         certificateExpiryDate: new Date(r.kashrut.expiryDate),
         certificateImageUrl: r.kashrut.certificateImageUrl,
         certificateVerified: r.kashrut.verified,
+        ownerId: demoOwner.id,
         menuItems: {
           create: r.menu.map((m) => ({
             id: `${r.id}__${m.id}`,
@@ -55,6 +64,9 @@ async function main() {
     });
   }
   console.log(`Seeded ${RESTAURANTS.length} restaurants.`);
+  console.log(
+    `Demo restaurant-owner login: ${DEMO_OWNER_PHONE} (owns all seeded restaurants) — log in at /auth, then visit /dashboard.`
+  );
 }
 
 main()
