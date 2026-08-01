@@ -14,17 +14,37 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default function OrdersPage() {
-  const { customerId } = useApp();
+  const { user, authLoading } = useApp();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!customerId) return;
-    fetch(`/api/orders?customerId=${encodeURIComponent(customerId)}`)
+    if (authLoading) return;
+    if (!user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- no fetch to wait on when logged out
+      setLoading(false);
+      return;
+    }
+    fetch("/api/orders")
       .then((res) => (res.ok ? res.json() : []))
       .then((data: Order[]) => setOrders(data))
       .finally(() => setLoading(false));
-  }, [customerId]);
+  }, [user, authLoading]);
+
+  if (!authLoading && !user) {
+    return (
+      <main className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center">
+        <span className="text-3xl">🔒</span>
+        <p className="font-medium text-stone-700">צריך להתחבר כדי לראות הזמנות</p>
+        <Link
+          href="/auth?next=/orders"
+          className="mt-2 rounded-2xl bg-emerald-700 text-white font-bold px-6 py-3"
+        >
+          התחברות עם טלפון
+        </Link>
+      </main>
+    );
+  }
 
   return (
     <main className="flex-1 flex flex-col px-4 py-6 gap-4">

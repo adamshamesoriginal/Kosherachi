@@ -15,7 +15,7 @@ export function BottomNav() {
   const pathname = usePathname();
   const { cartCount } = useApp();
 
-  if (pathname === "/" || pathname === "/onboarding") return null;
+  if (pathname === "/" || pathname === "/onboarding" || pathname === "/auth") return null;
 
   return (
     <nav className="fixed bottom-0 inset-x-0 z-40 border-t border-neutral-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">

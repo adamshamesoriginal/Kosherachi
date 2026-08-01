@@ -3,6 +3,7 @@
 import {
   createContext,
   useContext,
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -17,6 +18,11 @@ interface Preferences {
   onboarded: boolean;
 }
 
+export interface AuthUser {
+  id: string;
+  phone: string;
+}
+
 const DEFAULT_PREFS: Preferences = {
   kashrutLevels: [],
   foodTypes: [],
@@ -29,7 +35,10 @@ interface AppContextValue {
   setPrefs: (p: Partial<Preferences>) => void;
   completeOnboarding: (p: Omit<Preferences, "onboarded">) => void;
 
-  customerId: string;
+  user: AuthUser | null;
+  authLoading: boolean;
+  refreshUser: () => Promise<AuthUser | null>;
+  logout: () => Promise<void>;
 
   cart: CartItem[];
   cartRestaurantId: string | null;
@@ -44,20 +53,36 @@ interface AppContextValue {
 const AppContext = createContext<AppContextValue | null>(null);
 
 const STORAGE_KEY = "koshergo_state_v1";
-const CUSTOMER_ID_KEY = "koshergo_customer_id";
-
-function generateCustomerId(): string {
-  return `cust_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
-}
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [prefs, setPrefsState] = useState<Preferences>(DEFAULT_PREFS);
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [customerId, setCustomerId] = useState("");
   const [hydrated, setHydrated] = useState(false);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
-  // One-time hydration from localStorage on mount; setState-in-effect is
-  // intentional here since it syncs from an external store the server can't see.
+  const refreshUser = useCallback(async () => {
+    setAuthLoading(true);
+    try {
+      const res = await fetch("/api/auth/me");
+      const data = await res.json();
+      setUser(data.user);
+      return data.user as AuthUser | null;
+    } catch {
+      setUser(null);
+      return null;
+    } finally {
+      setAuthLoading(false);
+    }
+  }, []);
+
+  const logout = useCallback(async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    setUser(null);
+  }, []);
+
+  // One-time hydration from localStorage + session cookie on mount; setState-in-effect
+  // is intentional here since it syncs from external stores the server can't see.
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -67,17 +92,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (parsed.prefs) setPrefsState(parsed.prefs);
         if (parsed.cart) setCart(parsed.cart);
       }
-      let id = localStorage.getItem(CUSTOMER_ID_KEY);
-      if (!id) {
-        id = generateCustomerId();
-        localStorage.setItem(CUSTOMER_ID_KEY, id);
-      }
-      setCustomerId(id);
     } catch {
       // ignore corrupted local storage
     }
     setHydrated(true);
-  }, []);
+    refreshUser();
+  }, [refreshUser]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -134,7 +154,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         prefs,
         setPrefs,
         completeOnboarding,
-        customerId,
+        user,
+        authLoading,
+        refreshUser,
+        logout,
         cart,
         cartRestaurantId,
         addToCart,

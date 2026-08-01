@@ -1,11 +1,11 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getSessionUser } from "@/lib/auth";
 import { serializeOrder } from "@/lib/serialize";
 import { SERVICE_FEE, VAT_RATE } from "@/lib/pricing";
 
 interface CreateOrderBody {
-  customerId: string;
   restaurantId: string;
   items: { menuItemId: string; quantity: number }[];
   address: string;
@@ -14,14 +14,13 @@ interface CreateOrderBody {
 }
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const customerId = searchParams.get("customerId");
-  if (!customerId) {
-    return NextResponse.json({ error: "customerId is required" }, { status: 400 });
+  const user = await getSessionUser(request);
+  if (!user) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
   const orders = await prisma.order.findMany({
-    where: { customerId },
+    where: { userId: user.id },
     include: { items: { include: { menuItem: true } } },
     orderBy: { createdAt: "desc" },
   });
@@ -30,15 +29,14 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const user = await getSessionUser(request);
+  if (!user) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
   const body = (await request.json()) as Partial<CreateOrderBody>;
 
-  if (
-    !body.customerId ||
-    !body.restaurantId ||
-    !body.items?.length ||
-    !body.phone ||
-    !body.pickupOrDelivery
-  ) {
+  if (!body.restaurantId || !body.items?.length || !body.phone || !body.pickupOrDelivery) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
   if (body.pickupOrDelivery === "delivery" && !body.address) {
@@ -87,7 +85,7 @@ export async function POST(request: NextRequest) {
   const order = await prisma.order.create({
     data: {
       id: orderId,
-      customerId: body.customerId,
+      userId: user.id,
       restaurantId: restaurant.id,
       restaurantName: restaurant.name,
       subtotal,

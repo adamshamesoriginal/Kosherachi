@@ -4,7 +4,14 @@ import Link from "next/link";
 import { useApp } from "@/context/AppContext";
 
 export default function SplashPage() {
-  const { prefs } = useApp();
+  const { prefs, user, authLoading } = useApp();
+
+  const primaryHref = !user ? "/auth" : prefs.onboarded ? "/home" : "/onboarding";
+  const primaryLabel = !user
+    ? "בואו נתחיל"
+    : prefs.onboarded
+      ? "המשך לאפליקציה"
+      : "המשך להגדרת העדפות";
 
   return (
     <main className="flex-1 flex flex-col items-center justify-center gap-8 px-6 text-center">
@@ -26,12 +33,13 @@ export default function SplashPage() {
 
       <div className="w-full max-w-xs flex flex-col gap-3">
         <Link
-          href={prefs.onboarded ? "/home" : "/onboarding"}
+          href={primaryHref}
+          aria-disabled={authLoading}
           className="w-full rounded-2xl bg-emerald-700 text-white font-bold py-3.5 shadow-md shadow-emerald-900/20 active:scale-[0.98] transition-transform"
         >
-          {prefs.onboarded ? "המשך לאפליקציה" : "בואו נתחיל"}
+          {primaryLabel}
         </Link>
-        {prefs.onboarded && (
+        {user && prefs.onboarded && (
           <Link
             href="/onboarding"
             className="w-full rounded-2xl border border-stone-300 text-stone-600 font-medium py-3 active:scale-[0.98] transition-transform"

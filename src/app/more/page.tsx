@@ -1,4 +1,8 @@
+"use client";
+
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useApp } from "@/context/AppContext";
 
 const LINKS = [
   { href: "/onboarding", label: "העדפות כשרות ואזור", icon: "🛠️" },
@@ -12,9 +16,45 @@ const LINKS = [
 ];
 
 export default function MorePage() {
+  const router = useRouter();
+  const { user, authLoading, logout } = useApp();
+
   return (
     <main className="flex-1 flex flex-col px-4 py-6 gap-4">
       <h1 className="text-xl font-extrabold">עוד</h1>
+
+      <div className="rounded-2xl border border-stone-200 bg-white p-4 flex items-center justify-between">
+        {authLoading ? (
+          <p className="text-sm text-stone-400">טוען...</p>
+        ) : user ? (
+          <>
+            <div>
+              <p className="text-xs text-stone-500">מחוברים כ</p>
+              <p className="font-semibold text-stone-900" dir="ltr">{user.phone}</p>
+            </div>
+            <button
+              onClick={async () => {
+                await logout();
+                router.push("/");
+              }}
+              className="rounded-xl border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-600"
+            >
+              התנתקות
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-stone-500">לא מחוברים</p>
+            <Link
+              href="/auth"
+              className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white"
+            >
+              התחברות
+            </Link>
+          </>
+        )}
+      </div>
+
       <div className="flex flex-col rounded-2xl border border-stone-200 bg-white overflow-hidden">
         {LINKS.map((l, i) => (
           <Link

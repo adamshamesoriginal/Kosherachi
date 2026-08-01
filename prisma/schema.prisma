@@ -64,7 +64,8 @@ model Review {
 
 model Order {
   id                String   @id
-  customerId        String
+  userId            String
+  user              User     @relation(fields: [userId], references: [id])
   restaurantId      String
   restaurant        Restaurant @relation(fields: [restaurantId], references: [id])
   restaurantName    String
@@ -80,7 +81,40 @@ model Order {
 
   items OrderItem[]
 
-  @@index([customerId])
+  @@index([userId])
+}
+
+model User {
+  id        String    @id @default(cuid())
+  phone     String    @unique
+  name      String?
+  createdAt DateTime  @default(now())
+
+  sessions Session[]
+  orders   Order[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([userId])
+}
+
+model OtpCode {
+  id        String   @id @default(cuid())
+  phone     String
+  code      String
+  attempts  Int      @default(0)
+  consumed  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([phone])
 }
 
 model OrderItem {

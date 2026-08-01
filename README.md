@@ -17,12 +17,23 @@ Next.js (App Router) + TypeScript + Tailwind CSS on the frontend. The
 backend is a set of Next.js API routes (`src/app/api/*`) backed by
 **Prisma + SQLite** (`prisma/schema.prisma`, `prisma/dev.db`). Kashrut
 preferences and the shopping cart are UI-only state, kept in React context
-and `localStorage`; restaurants, menus, reviews, and orders live in the
-database.
+and `localStorage`; restaurants, menus, reviews, users, and orders live in
+the database.
 
-Anonymous customers are identified by a `customerId` generated client-side
-on first load and stored in `localStorage` — there's no real auth yet (see
-below).
+Registration is phone-number + OTP, no password: `/auth` collects a phone
+number, texts (in principle — see below) a 6-digit code, and on success
+issues an httpOnly session cookie (`src/lib/auth.ts`). Every API route that
+touches personal data (`/api/orders*`) reads the logged-in user from that
+cookie server-side — the client never gets to claim an identity by passing
+an id in the request.
+
+**No real SMS provider is wired up** (no Twilio account/keys in this
+environment). `src/lib/sms.ts` logs the OTP server-side and, only while
+`SMS_DEV_MODE` is on (i.e. no `SMS_PROVIDER_API_KEY` env var is set), the
+`/api/auth/request-otp` response includes the code so the login screen can
+show it — clearly labeled as demo mode, not hidden. To go live, implement
+`sendOtpSms` to call a real provider and set `SMS_PROVIDER_API_KEY`, which
+turns dev mode off automatically.
 
 ## Getting started
 
@@ -40,21 +51,29 @@ needs `db:push` + `db:seed` once before the app has data.
 
 ## App flow
 
-`/` (splash) → `/onboarding` (area, kashrut level, meat/dairy/parve) →
-`/home` (filtered restaurant list + search) → `/restaurant/[id]` (menu,
-kashrut certificate tab, reviews) → `/cart` → `/checkout` → `/order/[id]`
-(live status tracker, polling the API). `/partner` is the restaurant-owner
-signup form. `/more` links to the legal pages below.
+`/` (splash) → `/auth` (phone number → OTP, only if not already logged in)
+→ `/onboarding` (area, kashrut level, meat/dairy/parve) → `/home` (filtered
+restaurant list + search) → `/restaurant/[id]` (menu, kashrut certificate
+tab, reviews) → `/cart` → `/checkout` (requires login; redirects to
+`/auth?next=/checkout` otherwise) → `/order/[id]` (live status tracker,
+polling the API). `/partner` is the restaurant-owner signup form. `/more`
+shows the logged-in phone number + logout, and links to the legal pages
+below. Browsing restaurants doesn't require login — only placing an order
+and viewing order history do.
 
 ## API routes
 
 | Route | Purpose |
 |---|---|
+| `POST /api/auth/request-otp` | Send (log, in dev mode) a 6-digit code to a phone number; rate-limited to one per 30s per number |
+| `POST /api/auth/verify-otp` | Check the code (max 5 attempts, 5 min expiry); creates the user on first login and sets the session cookie |
+| `GET /api/auth/me` | Current logged-in user from the session cookie, or `null` |
+| `POST /api/auth/logout` | Deletes the session and clears the cookie |
 | `GET /api/restaurants` | List restaurants; filters via `area`, `kashrut` (csv), `foodType` (csv), `q` |
 | `GET /api/restaurants/[id]` | Single restaurant with menu + reviews |
-| `POST /api/orders` | Create an order; server re-prices items from the DB (never trusts client prices) and enforces the restaurant's minimum order |
-| `GET /api/orders?customerId=` | A customer's order history |
-| `GET /api/orders/[id]` | Single order; status is computed server-side from elapsed time since `createdAt`, not stored, so the client just polls |
+| `POST /api/orders` | Create an order for the logged-in user (401 otherwise); server re-prices items from the DB (never trusts client prices) and enforces the restaurant's minimum order |
+| `GET /api/orders` | The logged-in user's order history |
+| `GET /api/orders/[id]` | Single order, restricted to its owner (403 for anyone else); status is computed server-side from elapsed time since `createdAt`, not stored, so the client just polls |
 | `POST /api/partner-applications` | Restaurant-owner signup submissions |
 
 ## Israeli legal/compliance groundwork
@@ -90,10 +109,12 @@ sign-off.
   (e.g. Vercel). For production, point `datasource db` in
   `prisma/schema.prisma` at a hosted Postgres instance (Vercel Postgres,
   Neon, Supabase) — the rest of the app (routes, serializers) doesn't change.
-- **Auth**: customers are identified by a random `localStorage` id with no
-  verification. A real launch needs actual auth (phone OTP, per the original
-  product plan, or Apple/Google sign-in) so orders and history survive a
-  cleared browser or a new device.
+- **SMS delivery**: OTPs are logged server-side and echoed back to the login
+  screen in dev mode instead of actually being texted (see the Stack section
+  above) — swap in a real provider (Twilio etc.) before real users rely on it.
+- **Auth hardening**: OTPs are stored in plain text in `OtpCode` (fine for a
+  short-lived 6-digit code, but hash them for defense in depth), and there's
+  no Apple/Google sign-in yet, per the original product plan.
 - **Restaurant management**: menus/hours/kashrut certificates are edited via
   the seed script only. A real version needs a restaurant-facing dashboard.
 - **Payments**: the checkout form is a visual mock — no card data is

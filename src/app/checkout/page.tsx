@@ -9,12 +9,13 @@ import { SERVICE_FEE, VAT_RATE } from "@/lib/pricing";
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { cart, cartRestaurantId, cartTotal, customerId, clearCart } = useApp();
+  const { cart, cartRestaurantId, cartTotal, user, authLoading, clearCart } = useApp();
   const { restaurant, loading: restaurantLoading } = useRestaurant(cartRestaurantId);
 
   const [mode, setMode] = useState<"delivery" | "pickup">("delivery");
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
+  const [phoneTouched, setPhoneTouched] = useState(false);
   const [cardNumber, setCardNumber] = useState("");
   const [placing, setPlacing] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -29,7 +30,18 @@ export default function CheckoutPage() {
     }
   }, [cart.length, router]);
 
-  if (cart.length === 0) {
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace("/auth?next=/checkout");
+    }
+  }, [authLoading, user, router]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- prefilling from the account once user loads
+    if (user && !phoneTouched) setPhone(user.phone);
+  }, [user, phoneTouched]);
+
+  if (cart.length === 0 || authLoading || !user) {
     return null;
   }
 
@@ -46,7 +58,6 @@ export default function CheckoutPage() {
   const vatIncluded = total - total / (1 + VAT_RATE);
 
   const canSubmit =
-    !!customerId &&
     (mode === "pickup" || address.trim().length > 3) &&
     phone.trim().length >= 9 &&
     cardNumber.replace(/\s/g, "").length >= 12;
@@ -60,7 +71,6 @@ export default function CheckoutPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          customerId,
           restaurantId: restaurant.id,
           items: cart.map((c) => ({ menuItemId: c.item.id, quantity: c.quantity })),
           address,
@@ -132,7 +142,10 @@ export default function CheckoutPage() {
           <h2 className="font-semibold text-sm text-stone-700">טלפון ליצירת קשר</h2>
           <input
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            onChange={(e) => {
+              setPhone(e.target.value);
+              setPhoneTouched(true);
+            }}
             placeholder="05X-XXXXXXX"
             inputMode="tel"
             className="rounded-xl border border-stone-200 px-4 py-2.5 text-sm outline-none focus:border-emerald-500"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Order, OrderStatus } from "@/lib/types";
@@ -15,9 +15,11 @@ const STATUS_FLOW: { id: OrderStatus; label: string; icon: string }[] = [
 
 export default function OrderTrackingPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [unauthorized, setUnauthorized] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -25,7 +27,11 @@ export default function OrderTrackingPage() {
     const fetchOrder = () => {
       fetch(`/api/orders/${params.id}`)
         .then((res) => {
-          if (res.status === 404) {
+          if (res.status === 401) {
+            if (!cancelled) setUnauthorized(true);
+            return null;
+          }
+          if (res.status === 404 || res.status === 403) {
             if (!cancelled) setNotFound(true);
             return null;
           }
@@ -52,7 +58,11 @@ export default function OrderTrackingPage() {
     };
   }, [params.id]);
 
-  if (loading) {
+  useEffect(() => {
+    if (unauthorized) router.replace(`/auth?next=/order/${params.id}`);
+  }, [unauthorized, router, params.id]);
+
+  if (loading || unauthorized) {
     return (
       <main className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center text-stone-400">
         <p>טוען...</p>
