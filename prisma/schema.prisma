@@ -3,8 +3,13 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Schema pushes (CREATE TABLE etc.) need a direct connection — Neon's
+  // pooled endpoint (what DATABASE_URL should be, for the running app)
+  // doesn't support DDL. DIRECT_URL must be set to Neon's non-pooled
+  // connection string (same as DATABASE_URL if you're not using a pooler).
+  directUrl = env("DIRECT_URL")
 }
 
 model Restaurant {

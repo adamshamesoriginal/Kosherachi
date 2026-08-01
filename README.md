@@ -201,10 +201,21 @@ duplicate data.
 ### Deploying to Vercel
 
 1. Get a Postgres connection string (Neon, Vercel Postgres, Supabase — any
-   of them).
+   of them). **If your provider offers connection pooling (Neon does by
+   default), you need two env vars, not one:**
+   - `DATABASE_URL` — the **pooled** connection string (Neon: the one with
+     `-pooler` in the hostname). This is what the running app uses; pooling
+     matters because serverless functions open a lot of short-lived
+     connections.
+   - `DIRECT_URL` — the **direct**, non-pooled connection string. Schema
+     pushes (`prisma db push`, run automatically on every deploy — see
+     below) need this, since `CREATE TABLE`-style DDL statements generally
+     don't work through a pooler. If your provider doesn't pool, set both
+     to the same value.
 2. Import this repo on [vercel.com](https://vercel.com) (sign in with
    GitHub, "Add New Project," pick the branch).
-3. Add `DATABASE_URL` in the project's Environment Variables.
+3. Add `DATABASE_URL` and `DIRECT_URL` in the project's Environment
+   Variables.
 4. Deploy. The build script (`prisma db push && tsx prisma/seed.ts && next
    build`) creates the schema and seeds demo data automatically on first
    deploy — no separate migration step needed. Because the seed is
