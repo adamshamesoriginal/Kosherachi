@@ -9,7 +9,7 @@ import {
   useState,
   ReactNode,
 } from "react";
-import { CartItem, FoodType, KashrutLevel, MenuItem, Restaurant } from "@/lib/types";
+import { CartItem, FoodType, KashrutLevel, MenuItem, Restaurant, SelectedOption } from "@/lib/types";
 
 interface Preferences {
   kashrutLevels: KashrutLevel[];
@@ -46,9 +46,13 @@ interface AppContextValue {
 
   cart: CartItem[];
   cartRestaurantId: string | null;
-  addToCart: (restaurant: Restaurant, item: MenuItem) => void;
-  removeFromCart: (itemId: string) => void;
-  updateQuantity: (itemId: string, quantity: number) => void;
+  addToCart: (
+    restaurant: Restaurant,
+    item: MenuItem,
+    customization?: { selectedOptions: SelectedOption[]; note?: string; quantity?: number }
+  ) => void;
+  removeFromCart: (lineId: string) => void;
+  updateQuantity: (lineId: string, quantity: number) => void;
   clearCart: () => void;
   cartTotal: number;
   cartCount: number;
@@ -57,6 +61,18 @@ interface AppContextValue {
 const AppContext = createContext<AppContextValue | null>(null);
 
 const STORAGE_KEY = "koshergo_state_v1";
+
+// Two cart lines are the "same" line (quantity merges) only if they're the
+// same menu item with the exact same selected options and note — a falafel
+// with extra tehina is a different line from a falafel with none, even
+// though both are the same MenuItem.
+function cartLineKey(itemId: string, selectedOptions: SelectedOption[], note: string) {
+  const optionsKey = [...selectedOptions]
+    .map((o) => o.choiceId)
+    .sort()
+    .join(",");
+  return `${itemId}::${optionsKey}::${note.trim()}`;
+}
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [prefs, setPrefsState] = useState<Preferences>(DEFAULT_PREFS);
@@ -116,35 +132,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const cartRestaurantId = cart[0]?.restaurantId ?? null;
 
-  const addToCart = (restaurant: Restaurant, item: MenuItem) => {
+  const addToCart = (
+    restaurant: Restaurant,
+    item: MenuItem,
+    customization?: { selectedOptions: SelectedOption[]; note?: string; quantity?: number }
+  ) => {
+    const selectedOptions = customization?.selectedOptions ?? [];
+    const note = customization?.note ?? "";
+    const addQuantity = Math.max(1, customization?.quantity ?? 1);
+    const unitPrice =
+      item.price + selectedOptions.reduce((sum, o) => sum + o.priceDelta, 0);
+    const lineId = cartLineKey(item.id, selectedOptions, note);
+
     setCart((prev) => {
       if (prev.length > 0 && prev[0].restaurantId !== restaurant.id) {
-        return [{ restaurantId: restaurant.id, item, quantity: 1 }];
+        return [{ lineId, restaurantId: restaurant.id, item, quantity: addQuantity, unitPrice, selectedOptions, note }];
       }
-      const existing = prev.find((c) => c.item.id === item.id);
+      const existing = prev.find((c) => c.lineId === lineId);
       if (existing) {
         return prev.map((c) =>
-          c.item.id === item.id ? { ...c, quantity: c.quantity + 1 } : c
+          c.lineId === lineId ? { ...c, quantity: c.quantity + addQuantity } : c
         );
       }
-      return [...prev, { restaurantId: restaurant.id, item, quantity: 1 }];
+      return [...prev, { lineId, restaurantId: restaurant.id, item, quantity: addQuantity, unitPrice, selectedOptions, note }];
     });
   };
 
-  const removeFromCart = (itemId: string) =>
-    setCart((prev) => prev.filter((c) => c.item.id !== itemId));
+  const removeFromCart = (lineId: string) =>
+    setCart((prev) => prev.filter((c) => c.lineId !== lineId));
 
-  const updateQuantity = (itemId: string, quantity: number) =>
+  const updateQuantity = (lineId: string, quantity: number) =>
     setCart((prev) =>
       quantity <= 0
-        ? prev.filter((c) => c.item.id !== itemId)
-        : prev.map((c) => (c.item.id === itemId ? { ...c, quantity } : c))
+        ? prev.filter((c) => c.lineId !== lineId)
+        : prev.map((c) => (c.lineId === lineId ? { ...c, quantity } : c))
     );
 
   const clearCart = () => setCart([]);
 
   const cartTotal = useMemo(
-    () => cart.reduce((sum, c) => sum + c.item.price * c.quantity, 0),
+    () => cart.reduce((sum, c) => sum + c.unitPrice * c.quantity, 0),
     [cart]
   );
   const cartCount = useMemo(

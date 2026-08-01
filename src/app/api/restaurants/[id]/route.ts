@@ -9,7 +9,13 @@ export async function GET(
   const { id } = await params;
   const restaurant = await prisma.restaurant.findUnique({
     where: { id },
-    include: { menuItems: { where: { available: true } }, reviews: true },
+    include: {
+      menuItems: {
+        where: { available: true },
+        include: { options: { include: { choices: true } } },
+      },
+      reviews: true,
+    },
   });
 
   if (!restaurant || !restaurant.published) {

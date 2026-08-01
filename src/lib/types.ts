@@ -25,16 +25,44 @@ export interface KashrutCertificate {
   verified: boolean;
 }
 
+export type MenuItemOptionType = "single" | "multi";
+
+export interface MenuItemOptionChoice {
+  id: string;
+  label: string;
+  priceDelta: number; // ILS, added per unit when selected
+}
+
+export interface MenuItemOption {
+  id: string;
+  name: string; // e.g. "תוספות"
+  type: MenuItemOptionType;
+  required: boolean;
+  choices: MenuItemOptionChoice[];
+}
+
 export interface MenuItem {
   id: string;
   name: string;
   description: string;
-  price: number; // ILS
+  price: number; // ILS, base price before any selected options
   imageUrl: string;
   foodType: FoodType;
   category: string;
   popular?: boolean;
   available?: boolean;
+  options?: MenuItemOption[];
+}
+
+// A choice the customer made within one MenuItemOption group, snapshotted
+// at order time (label/priceDelta may later change or the option/choice
+// may be deleted — the snapshot keeps past orders accurate).
+export interface SelectedOption {
+  optionId: string;
+  optionName: string;
+  choiceId: string;
+  choiceLabel: string;
+  priceDelta: number;
 }
 
 export interface Review {
@@ -67,9 +95,13 @@ export interface Restaurant {
 }
 
 export interface CartItem {
+  lineId: string; // unique per item+customization combo, distinct from item.id
   restaurantId: string;
   item: MenuItem;
   quantity: number;
+  unitPrice: number; // item.price + sum of selectedOptions' priceDelta
+  selectedOptions: SelectedOption[];
+  note: string; // per-item note, e.g. "בלי בצל"
 }
 
 export type OrderStatus =
@@ -92,6 +124,7 @@ export interface Order {
   vat: number;
   total: number;
   address: string;
+  note: string | null; // general instructions for the whole order
   status: OrderStatus;
   paymentStatus: PaymentStatus;
   createdAt: string;

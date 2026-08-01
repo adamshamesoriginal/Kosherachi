@@ -5,13 +5,20 @@ import { getSessionUser } from "@/lib/auth";
 import { serializeOrder } from "@/lib/serialize";
 import { SERVICE_FEE, VAT_RATE } from "@/lib/pricing";
 import { createPaymentPage, MESHULAM_CONFIGURED } from "@/lib/meshulam";
+import { SelectedOption } from "@/lib/types";
 
 interface CreateOrderBody {
   restaurantId: string;
-  items: { menuItemId: string; quantity: number }[];
+  items: {
+    menuItemId: string;
+    quantity: number;
+    selectedChoiceIds?: string[];
+    note?: string;
+  }[];
   address: string;
   phone: string;
   pickupOrDelivery: "delivery" | "pickup";
+  note?: string;
 }
 
 export async function GET(request: NextRequest) {
@@ -46,14 +53,23 @@ export async function POST(request: NextRequest) {
 
   const restaurant = await prisma.restaurant.findUnique({
     where: { id: body.restaurantId },
-    include: { menuItems: true },
+    include: {
+      menuItems: { include: { options: { include: { choices: true } } } },
+    },
   });
   if (!restaurant) {
     return NextResponse.json({ error: "Restaurant not found" }, { status: 404 });
   }
 
   const menuById = new Map(restaurant.menuItems.map((m) => [m.id, m]));
-  const orderItemsInput: { menuItem: (typeof restaurant.menuItems)[number]; quantity: number }[] = [];
+  const orderItemsInput: {
+    menuItem: (typeof restaurant.menuItems)[number];
+    quantity: number;
+    unitPrice: number;
+    selectedOptions: SelectedOption[];
+    note: string | null;
+  }[] = [];
+
   for (const requested of body.items) {
     const menuItem = menuById.get(requested.menuItemId);
     if (!menuItem) {
@@ -68,11 +84,62 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    orderItemsInput.push({ menuItem, quantity: Math.max(1, Math.floor(requested.quantity)) });
+
+    // Never trust prices, labels, or which choices exist from the client —
+    // every selected choice id is re-resolved against this menu item's own
+    // options as stored in the DB right now.
+    const requestedChoiceIds = new Set(requested.selectedChoiceIds ?? []);
+    const choiceById = new Map(
+      menuItem.options.flatMap((o) => o.choices.map((c) => [c.id, { option: o, choice: c }] as const))
+    );
+    const selectedOptions: SelectedOption[] = [];
+    for (const choiceId of requestedChoiceIds) {
+      const found = choiceById.get(choiceId);
+      if (!found) {
+        return NextResponse.json(
+          { error: `${menuItem.name}: אפשרות בחירה לא תקינה` },
+          { status: 400 }
+        );
+      }
+      selectedOptions.push({
+        optionId: found.option.id,
+        optionName: found.option.name,
+        choiceId: found.choice.id,
+        choiceLabel: found.choice.label,
+        priceDelta: found.choice.priceDelta,
+      });
+    }
+
+    for (const option of menuItem.options) {
+      const chosenForOption = selectedOptions.filter((s) => s.optionId === option.id);
+      if (option.required && chosenForOption.length === 0) {
+        return NextResponse.json(
+          { error: `${menuItem.name}: יש לבחור אפשרות עבור "${option.name}"` },
+          { status: 400 }
+        );
+      }
+      if (option.type === "single" && chosenForOption.length > 1) {
+        return NextResponse.json(
+          { error: `${menuItem.name}: ניתן לבחור אפשרות אחת בלבד עבור "${option.name}"` },
+          { status: 400 }
+        );
+      }
+    }
+
+    const unitPrice =
+      menuItem.price + selectedOptions.reduce((sum, o) => sum + o.priceDelta, 0);
+
+    orderItemsInput.push({
+      menuItem,
+      quantity: Math.max(1, Math.floor(requested.quantity)),
+      unitPrice,
+      selectedOptions,
+      note: requested.note?.trim() || null,
+    });
   }
 
   const subtotal = orderItemsInput.reduce(
-    (sum, { menuItem, quantity }) => sum + menuItem.price * quantity,
+    (sum, { unitPrice, quantity }) => sum + unitPrice * quantity,
     0
   );
 
@@ -135,15 +202,18 @@ export async function POST(request: NextRequest) {
       address,
       phone: body.phone,
       pickupOrDelivery: body.pickupOrDelivery,
+      note: body.note?.trim() || null,
       paymentStatus: MESHULAM_CONFIGURED ? "pending" : "paid",
       paymentProvider: MESHULAM_CONFIGURED ? "meshulam" : null,
       paymentTransactionId,
       items: {
-        create: orderItemsInput.map(({ menuItem, quantity }) => ({
+        create: orderItemsInput.map(({ menuItem, quantity, unitPrice, selectedOptions, note }) => ({
           menuItemId: menuItem.id,
           name: menuItem.name,
-          price: menuItem.price,
+          price: unitPrice,
           quantity,
+          note,
+          selectedOptionsJson: selectedOptions.length ? JSON.stringify(selectedOptions) : null,
         })),
       },
     },

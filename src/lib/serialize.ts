@@ -1,6 +1,8 @@
 import type {
   Restaurant as DbRestaurant,
   MenuItem as DbMenuItem,
+  MenuItemOption as DbMenuItemOption,
+  MenuItemOptionChoice as DbMenuItemOptionChoice,
   Review as DbReview,
   Order as DbOrder,
   OrderItem as DbOrderItem,
@@ -11,6 +13,8 @@ import {
   FoodType,
   KashrutLevel,
   MenuItem,
+  MenuItemOption,
+  MenuItemOptionType,
   Order,
   OrderStatus,
   PartnerApplication,
@@ -18,14 +22,33 @@ import {
   PaymentStatus,
   Restaurant,
   Review,
+  SelectedOption,
 } from "./types";
 
+type MenuItemWithOptions = DbMenuItem & {
+  options?: (DbMenuItemOption & { choices: DbMenuItemOptionChoice[] })[];
+};
+
 type RestaurantWithRelations = DbRestaurant & {
-  menuItems: DbMenuItem[];
+  menuItems: MenuItemWithOptions[];
   reviews: DbReview[];
 };
 
-export function serializeMenuItem(m: DbMenuItem): MenuItem {
+function serializeMenuItemOption(
+  o: DbMenuItemOption & { choices: DbMenuItemOptionChoice[] }
+): MenuItemOption {
+  return {
+    id: o.id,
+    name: o.name,
+    type: o.type as MenuItemOptionType,
+    required: o.required,
+    choices: [...o.choices]
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((c) => ({ id: c.id, label: c.label, priceDelta: c.priceDelta })),
+  };
+}
+
+export function serializeMenuItem(m: MenuItemWithOptions): MenuItem {
   return {
     id: m.id,
     name: m.name,
@@ -36,6 +59,11 @@ export function serializeMenuItem(m: DbMenuItem): MenuItem {
     category: m.category,
     popular: m.popular,
     available: m.available,
+    options: m.options
+      ? [...m.options]
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .map(serializeMenuItemOption)
+      : undefined,
   };
 }
 
@@ -89,25 +117,40 @@ export function serializeOrder(o: OrderWithItems): Order {
     id: o.id,
     restaurantId: o.restaurantId,
     restaurantName: o.restaurantName,
-    items: o.items.map((it) => ({
-      restaurantId: o.restaurantId,
-      quantity: it.quantity,
-      item: {
-        id: it.menuItemId,
-        name: it.name,
-        description: it.menuItem?.description ?? "",
-        price: it.price,
-        imageUrl: it.menuItem?.imageUrl ?? "",
-        foodType: (it.menuItem?.foodType ?? "parve") as FoodType,
-        category: it.menuItem?.category ?? "",
-      },
-    })),
+    items: o.items.map((it) => {
+      let selectedOptions: SelectedOption[] = [];
+      if (it.selectedOptionsJson) {
+        try {
+          selectedOptions = JSON.parse(it.selectedOptionsJson);
+        } catch {
+          // corrupt/legacy row — treat as no selections rather than fail the whole order
+        }
+      }
+      return {
+        lineId: it.id,
+        restaurantId: o.restaurantId,
+        quantity: it.quantity,
+        unitPrice: it.price,
+        selectedOptions,
+        note: it.note ?? "",
+        item: {
+          id: it.menuItemId,
+          name: it.name,
+          description: it.menuItem?.description ?? "",
+          price: it.menuItem?.price ?? it.price,
+          imageUrl: it.menuItem?.imageUrl ?? "",
+          foodType: (it.menuItem?.foodType ?? "parve") as FoodType,
+          category: it.menuItem?.category ?? "",
+        },
+      };
+    }),
     subtotal: o.subtotal,
     deliveryFee: o.deliveryFee,
     serviceFee: o.serviceFee,
     vat: o.vat,
     total: o.total,
     address: o.address,
+    note: o.note,
     status: o.status as OrderStatus,
     paymentStatus: o.paymentStatus as PaymentStatus,
     createdAt: o.createdAt.toISOString(),

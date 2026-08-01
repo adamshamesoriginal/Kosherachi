@@ -167,11 +167,19 @@ export default function OrderTrackingPage() {
       <div className="rounded-2xl border border-stone-200 bg-white p-4 flex flex-col gap-2">
         <h2 className="font-bold text-stone-900">פרטי ההזמנה</h2>
         {order.items.map((c) => (
-          <div key={c.item.id} className="flex justify-between text-sm text-stone-600">
-            <span>
-              {c.quantity} × {c.item.name}
-            </span>
-            <span>₪{(c.item.price * c.quantity).toFixed(0)}</span>
+          <div key={c.lineId} className="flex flex-col gap-0.5 text-sm text-stone-600 pb-1">
+            <div className="flex justify-between">
+              <span>
+                {c.quantity} × {c.item.name}
+              </span>
+              <span>₪{(c.unitPrice * c.quantity).toFixed(0)}</span>
+            </div>
+            {c.selectedOptions.length > 0 && (
+              <p className="text-xs text-stone-400">
+                {c.selectedOptions.map((o) => o.choiceLabel).join(", ")}
+              </p>
+            )}
+            {c.note && <p className="text-xs text-stone-400 italic">&quot;{c.note}&quot;</p>}
           </div>
         ))}
         <div className="flex justify-between font-bold text-stone-900 pt-2 mt-1 border-t border-stone-100">
@@ -181,6 +189,11 @@ export default function OrderTrackingPage() {
         <p className="text-xs text-stone-500 pt-1">
           {order.pickupOrDelivery === "delivery" ? "משלוח אל" : "איסוף מ"}: {order.address}
         </p>
+        {order.note && (
+          <p className="text-xs text-stone-500">
+            הערות: <span className="italic">{order.note}</span>
+          </p>
+        )}
       </div>
 
       <Link

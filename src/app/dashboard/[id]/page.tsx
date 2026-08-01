@@ -162,11 +162,21 @@ function OrdersTab({ restaurantId }: { restaurantId: string }) {
             <p className="text-xs text-stone-400">
               {new Date(order.createdAt).toLocaleString("he-IL")}
             </p>
-            <div className="flex flex-col gap-0.5 text-sm text-stone-600">
+            <div className="flex flex-col gap-1 text-sm text-stone-600">
               {order.items.map((c) => (
-                <div key={c.item.id} className="flex justify-between">
-                  <span>{c.quantity} × {c.item.name}</span>
-                  <span>₪{(c.item.price * c.quantity).toFixed(0)}</span>
+                <div key={c.lineId} className="flex flex-col gap-0.5">
+                  <div className="flex justify-between">
+                    <span>{c.quantity} × {c.item.name}</span>
+                    <span>₪{(c.unitPrice * c.quantity).toFixed(0)}</span>
+                  </div>
+                  {c.selectedOptions.length > 0 && (
+                    <p className="text-xs text-emerald-700 font-medium">
+                      {c.selectedOptions.map((o) => o.choiceLabel).join(", ")}
+                    </p>
+                  )}
+                  {c.note && (
+                    <p className="text-xs text-amber-700 font-medium">&quot;{c.note}&quot;</p>
+                  )}
                 </div>
               ))}
             </div>
@@ -177,6 +187,11 @@ function OrdersTab({ restaurantId }: { restaurantId: string }) {
             <p className="text-xs text-stone-500">
               {order.pickupOrDelivery === "delivery" ? "משלוח אל" : "איסוף מ"}: {order.address}
             </p>
+            {order.note && (
+              <p className="text-xs font-medium text-amber-700">
+                הערות להזמנה: {order.note}
+              </p>
+            )}
             {next && (
               <button
                 onClick={() => advance(order)}

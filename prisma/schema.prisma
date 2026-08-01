@@ -62,7 +62,35 @@ model MenuItem {
   popular      Boolean    @default(false)
   available    Boolean    @default(true)
 
+  options    MenuItemOption[]
   orderItems OrderItem[]
+}
+
+// A customization group for a menu item, e.g. "תוספות" (multi-select
+// add-ons) or "רמת חריפות" (single-select). Optional — most items have none.
+model MenuItemOption {
+  id         String   @id @default(cuid())
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  name       String
+  type       String // "single" | "multi"
+  required   Boolean  @default(false)
+  sortOrder  Int      @default(0)
+
+  choices MenuItemOptionChoice[]
+
+  @@index([menuItemId])
+}
+
+model MenuItemOptionChoice {
+  id         String         @id @default(cuid())
+  optionId   String
+  option     MenuItemOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  label      String
+  priceDelta Float          @default(0)
+  sortOrder  Int            @default(0)
+
+  @@index([optionId])
 }
 
 model Review {
@@ -90,6 +118,7 @@ model Order {
   address           String
   phone             String
   pickupOrDelivery  String
+  note              String? // general instructions for the whole order, e.g. "בבקשה לצלצל בפעמון"
   status            String   @default("placed")
   createdAt         DateTime @default(now())
 
@@ -152,8 +181,15 @@ model OrderItem {
   menuItemId String
   menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
   name       String
-  price      Float
+  price      Float // per-unit price, including any selected option price deltas
   quantity   Int
+  note       String? // e.g. "בלי בצל"
+
+  // Snapshot of the chosen options at order time (JSON array of
+  // { optionName, choiceLabel, priceDelta }) — kept as a snapshot rather
+  // than a live relation because the owner can edit/delete options later
+  // and past orders must keep showing what was actually selected.
+  selectedOptionsJson String?
 }
 
 model PartnerApplication {

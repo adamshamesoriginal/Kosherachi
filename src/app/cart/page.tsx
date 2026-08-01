@@ -45,7 +45,7 @@ export default function CartPage() {
       <div className="px-4 flex flex-col gap-3">
         {cart.map((c) => (
           <div
-            key={c.item.id}
+            key={c.lineId}
             className="flex gap-3 rounded-2xl border border-stone-200 bg-white p-3"
           >
             <div className="relative h-16 w-16 shrink-0 rounded-xl overflow-hidden bg-stone-100">
@@ -61,11 +61,19 @@ export default function CartPage() {
               <h3 className="font-semibold text-stone-900 text-sm truncate">
                 {c.item.name}
               </h3>
-              <p className="text-xs text-stone-500">₪{c.item.price} ליחידה</p>
+              <p className="text-xs text-stone-500">₪{c.unitPrice.toFixed(2)} ליחידה</p>
+              {c.selectedOptions.length > 0 && (
+                <p className="text-xs text-stone-500">
+                  {c.selectedOptions.map((o) => o.choiceLabel).join(", ")}
+                </p>
+              )}
+              {c.note && (
+                <p className="text-xs text-stone-400 italic truncate">&quot;{c.note}&quot;</p>
+              )}
               <div className="mt-auto flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => updateQuantity(c.item.id, c.quantity - 1)}
+                    onClick={() => updateQuantity(c.lineId, c.quantity - 1)}
                     className="h-7 w-7 rounded-full bg-stone-100 font-bold text-stone-600"
                   >
                     −
@@ -74,19 +82,19 @@ export default function CartPage() {
                     {c.quantity}
                   </span>
                   <button
-                    onClick={() => updateQuantity(c.item.id, c.quantity + 1)}
+                    onClick={() => updateQuantity(c.lineId, c.quantity + 1)}
                     className="h-7 w-7 rounded-full bg-stone-100 font-bold text-stone-600"
                   >
                     +
                   </button>
                 </div>
                 <span className="font-bold text-stone-900">
-                  ₪{(c.item.price * c.quantity).toFixed(0)}
+                  ₪{(c.unitPrice * c.quantity).toFixed(0)}
                 </span>
               </div>
             </div>
             <button
-              onClick={() => removeFromCart(c.item.id)}
+              onClick={() => removeFromCart(c.lineId)}
               className="text-stone-300 self-start text-lg"
               aria-label="הסרה"
             >

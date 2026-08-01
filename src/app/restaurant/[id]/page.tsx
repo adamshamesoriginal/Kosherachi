@@ -7,9 +7,10 @@ import { useMemo, useState } from "react";
 import { KashrutBadge } from "@/components/KashrutBadge";
 import { FoodTypeBadge } from "@/components/FoodTypeBadge";
 import { KashrutCertificateCard } from "@/components/KashrutCertificateCard";
+import { MenuItemCustomizeSheet } from "@/components/MenuItemCustomizeSheet";
 import { useApp } from "@/context/AppContext";
 import { useRestaurant } from "@/hooks/useRestaurant";
-import { MenuItem } from "@/lib/types";
+import { MenuItem, SelectedOption } from "@/lib/types";
 
 export default function RestaurantPage() {
   const params = useParams<{ id: string }>();
@@ -17,6 +18,7 @@ export default function RestaurantPage() {
   const { addToCart, cart, cartRestaurantId, cartCount, cartTotal } = useApp();
   const [tab, setTab] = useState<"menu" | "kashrut" | "reviews">("menu");
   const [addedItemId, setAddedItemId] = useState<string | null>(null);
+  const [customizingItem, setCustomizingItem] = useState<MenuItem | null>(null);
   const { restaurant, loading, notFound } = useRestaurant(params.id);
 
   const categories = useMemo(() => {
@@ -47,15 +49,34 @@ export default function RestaurantPage() {
   const willReplaceCart =
     cart.length > 0 && cartRestaurantId !== restaurant.id;
 
+  const confirmReplaceCartIfNeeded = () => {
+    if (!willReplaceCart) return true;
+    return window.confirm(
+      "יש לכם פריטים בעגלה ממסעדה אחרת. הוספת מנה זו תרוקן את העגלה הנוכחית. להמשיך?"
+    );
+  };
+
   const handleAdd = (item: MenuItem) => {
-    if (willReplaceCart) {
-      const confirmed = window.confirm(
-        "יש לכם פריטים בעגלה ממסעדה אחרת. הוספת מנה זו תרוקן את העגלה הנוכחית. להמשיך?"
-      );
-      if (!confirmed) return;
+    if (item.options && item.options.length > 0) {
+      if (!confirmReplaceCartIfNeeded()) return;
+      setCustomizingItem(item);
+      return;
     }
+    if (!confirmReplaceCartIfNeeded()) return;
     addToCart(restaurant, item);
     setAddedItemId(item.id);
+    setTimeout(() => setAddedItemId(null), 1200);
+  };
+
+  const handleConfirmCustomization = (
+    selectedOptions: SelectedOption[],
+    note: string,
+    quantity: number
+  ) => {
+    if (!customizingItem) return;
+    addToCart(restaurant, customizingItem, { selectedOptions, note, quantity });
+    setAddedItemId(customizingItem.id);
+    setCustomizingItem(null);
     setTimeout(() => setAddedItemId(null), 1200);
   };
 
@@ -199,7 +220,11 @@ export default function RestaurantPage() {
                               : "bg-emerald-50 text-emerald-700"
                           }`}
                         >
-                          {addedItemId === item.id ? "נוסף ✓" : "+ הוספה"}
+                          {addedItemId === item.id
+                            ? "נוסף ✓"
+                            : item.options && item.options.length > 0
+                              ? "התאמה אישית"
+                              : "+ הוספה"}
                         </button>
                       </div>
                     </div>
@@ -251,6 +276,14 @@ export default function RestaurantPage() {
             <span className="font-bold">₪{cartTotal.toFixed(0)}</span>
           </Link>
         </div>
+      )}
+
+      {customizingItem && (
+        <MenuItemCustomizeSheet
+          item={customizingItem}
+          onClose={() => setCustomizingItem(null)}
+          onConfirm={handleConfirmCustomization}
+        />
       )}
     </main>
   );

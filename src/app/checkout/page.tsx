@@ -16,6 +16,7 @@ export default function CheckoutPage() {
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
   const [phoneTouched, setPhoneTouched] = useState(false);
+  const [note, setNote] = useState("");
   const [placing, setPlacing] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   // Redirecting to the payment provider (or, in demo mode, to the order
@@ -68,10 +69,16 @@ export default function CheckoutPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           restaurantId: restaurant.id,
-          items: cart.map((c) => ({ menuItemId: c.item.id, quantity: c.quantity })),
+          items: cart.map((c) => ({
+            menuItemId: c.item.id,
+            quantity: c.quantity,
+            selectedChoiceIds: c.selectedOptions.map((o) => o.choiceId),
+            note: c.note || undefined,
+          })),
           address,
           phone,
           pickupOrDelivery: mode,
+          note: note.trim() || undefined,
         }),
       });
       if (!res.ok) {
@@ -155,6 +162,18 @@ export default function CheckoutPage() {
             placeholder="05X-XXXXXXX"
             inputMode="tel"
             className="rounded-xl border border-stone-200 px-4 py-2.5 text-sm outline-none focus:border-emerald-500"
+          />
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="font-semibold text-sm text-stone-700">הערות להזמנה (אופציונלי)</h2>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="לדוגמה: בבקשה לצלצל בפעמון, קוד כניסה 1234"
+            rows={2}
+            maxLength={300}
+            className="rounded-xl border border-stone-200 px-4 py-2.5 text-sm outline-none focus:border-emerald-500 resize-none"
           />
         </section>
 
