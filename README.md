@@ -174,20 +174,45 @@ design).
 
 ## Getting started
 
+The database is **Postgres** (moved off SQLite so the app can deploy to
+Vercel or any other serverless host — SQLite's single-file model doesn't
+survive an environment with no persistent, shared filesystem). Get a free
+one from [neon.tech](https://neon.tech) (or Vercel Postgres/Supabase — any
+Postgres connection string works), then:
+
 ```bash
+echo 'DATABASE_URL="postgresql://user:pass@host/db?sslmode=require"' > .env
 npm install          # also runs `prisma generate` via postinstall
-npm run db:push       # create/sync the SQLite schema
+npm run db:push       # create/sync the schema
 npm run db:seed       # populate demo restaurants, menus, and reviews
 npm run dev
 ```
 
 Open http://localhost:3000.
 
-The SQLite file lives at `prisma/dev.db` and is gitignored — every clone
-needs `db:push` + `db:seed` once before the app has data. Seeding also
-prints a demo restaurant-owner login (`0501112222`, owns all 6 seeded
-restaurants) — log in with it at `/auth` and visit `/dashboard` to manage
-menus and orders.
+`.env` is gitignored — every clone needs its own `DATABASE_URL` (and,
+before pushing, its own `db:push` + `db:seed`, unless pointed at a database
+that's already been seeded). Seeding also prints a demo restaurant-owner
+login (`0501112222`, owns all 6 seeded restaurants) — log in with it at
+`/auth` and visit `/dashboard` to manage menus and orders. The seed script
+is upsert-based and safe to re-run against the same database — it won't
+duplicate data.
+
+### Deploying to Vercel
+
+1. Get a Postgres connection string (Neon, Vercel Postgres, Supabase — any
+   of them).
+2. Import this repo on [vercel.com](https://vercel.com) (sign in with
+   GitHub, "Add New Project," pick the branch).
+3. Add `DATABASE_URL` in the project's Environment Variables.
+4. Deploy. The build script (`prisma db push && tsx prisma/seed.ts && next
+   build`) creates the schema and seeds demo data automatically on first
+   deploy — no separate migration step needed. Because the seed is
+   upsert-based, later deploys re-run it harmlessly.
+5. Everything else (Twilio, Google/Apple OAuth, Meshulam) is optional — add
+   those env vars in the same settings screen only if/when you want them
+   live; unset, each one falls back to the same demo behavior described
+   above.
 
 ## App flow
 
@@ -297,11 +322,9 @@ sign-off.
 
 ## What's mocked / what's next for a real MVP
 
-- **Database**: SQLite is great for local dev and this demo, but its
-  single-file model doesn't survive serverless/multi-instance deployment
-  (e.g. Vercel). For production, point `datasource db` in
-  `prisma/schema.prisma` at a hosted Postgres instance (Vercel Postgres,
-  Neon, Supabase) — the rest of the app (routes, serializers) doesn't change.
+- **Database**: runs on Postgres (see "Getting started" above) — moved off
+  the original SQLite setup specifically so it can deploy to Vercel or any
+  other serverless host with no persistent, shared filesystem.
 - **SMS delivery**: Twilio integration is implemented (see the Stack section
   above) but untested against a real account — there isn't one connected in
   this environment. Add credentials and send yourself a code before trusting
