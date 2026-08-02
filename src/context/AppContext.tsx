@@ -74,6 +74,37 @@ function cartLineKey(itemId: string, selectedOptions: SelectedOption[], note: st
   return `${itemId}::${optionsKey}::${note.trim()}`;
 }
 
+// Carts saved to localStorage before customization support was added are
+// missing lineId/unitPrice/selectedOptions/note — reconstruct them instead
+// of crashing the cart page on old data. Also drops anything too malformed
+// to recover (no item/restaurantId at all).
+function normalizeStoredCart(raw: unknown): CartItem[] {
+  if (!Array.isArray(raw)) return [];
+  const result: CartItem[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const c = entry as Partial<CartItem> & { item?: MenuItem; restaurantId?: string };
+    if (!c.item || !c.restaurantId || typeof c.quantity !== "number") continue;
+    const selectedOptions = Array.isArray(c.selectedOptions) ? c.selectedOptions : [];
+    const note = typeof c.note === "string" ? c.note : "";
+    const unitPrice =
+      typeof c.unitPrice === "number"
+        ? c.unitPrice
+        : c.item.price + selectedOptions.reduce((sum, o) => sum + o.priceDelta, 0);
+    const lineId = typeof c.lineId === "string" ? c.lineId : cartLineKey(c.item.id, selectedOptions, note);
+    result.push({
+      lineId,
+      restaurantId: c.restaurantId,
+      item: c.item,
+      quantity: c.quantity,
+      unitPrice,
+      selectedOptions,
+      note,
+    });
+  }
+  return result;
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [prefs, setPrefsState] = useState<Preferences>(DEFAULT_PREFS);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -110,7 +141,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const parsed = JSON.parse(raw);
         // eslint-disable-next-line react-hooks/set-state-in-effect
         if (parsed.prefs) setPrefsState(parsed.prefs);
-        if (parsed.cart) setCart(parsed.cart);
+        if (parsed.cart) setCart(normalizeStoredCart(parsed.cart));
       }
     } catch {
       // ignore corrupted local storage
